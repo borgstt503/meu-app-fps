@@ -7,6 +7,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
@@ -25,68 +28,115 @@ class MainActivity : Activity() {
     private var status: TextView? = null
     private var listaApps: LinearLayout? = null
 
+    private val corFundo = Color.parseColor("#121212")
+    private val corCartao = Color.parseColor("#1E1E1E")
+    private val corBotao = Color.parseColor("#2A2A2A")
+    private val laranja = Color.parseColor("#FF8A00")
+    private val textoSuave = Color.parseColor("#B0B0B0")
+
     private val fixos = setOf(
         "com.dts.freefireth",
         "com.dts.freefiremax",
         "moe.shizuku.privileged.api"
     )
 
+    private fun dp(v: Int): Int {
+        return (v * resources.displayMetrics.density).toInt()
+    }
+
+    private fun fundoArredondado(cor: Int, raio: Int): GradientDrawable {
+        val g = GradientDrawable()
+        g.setColor(cor)
+        g.cornerRadius = dp(raio).toFloat()
+        return g
+    }
+
+    private fun criarCartao(): LinearLayout {
+        val c = LinearLayout(this)
+        c.orientation = LinearLayout.VERTICAL
+        c.background = fundoArredondado(corCartao, 16)
+        c.setPadding(dp(20), dp(16), dp(20), dp(16))
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.bottomMargin = dp(12)
+        c.layoutParams = lp
+        return c
+    }
+
+    private fun criarBotao(texto: String, principal: Boolean, acao: () -> Unit): Button {
+        val b = Button(this)
+        b.text = texto
+        b.isAllCaps = false
+        b.textSize = if (principal) 18f else 15f
+        b.setTextColor(if (principal) Color.BLACK else Color.WHITE)
+        b.background = fundoArredondado(if (principal) laranja else corBotao, 14)
+        val altura = if (principal) dp(60) else dp(50)
+        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, altura)
+        lp.bottomMargin = dp(10)
+        b.layoutParams = lp
+        b.setOnClickListener { acao() }
+        return b
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
+            window.statusBarColor = corFundo
+            window.navigationBarColor = corFundo
+
             val scroll = ScrollView(this)
+            scroll.setBackgroundColor(corFundo)
+
             val layout = LinearLayout(this)
             layout.orientation = LinearLayout.VERTICAL
-            layout.setPadding(48, 96, 48, 96)
+            layout.setPadding(dp(20), dp(40), dp(20), dp(40))
             scroll.addView(layout)
 
+            val titulo = TextView(this)
+            titulo.text = "Meu App FPS"
+            titulo.textSize = 28f
+            titulo.setTextColor(laranja)
+            titulo.setPadding(dp(4), 0, 0, dp(4))
+
+            val sub = TextView(this)
+            sub.text = "Desempenho para o Free Fire"
+            sub.textSize = 14f
+            sub.setTextColor(textoSuave)
+            sub.setPadding(dp(4), 0, 0, dp(20))
+
+            val cartaoInfo = criarCartao()
             val t1 = TextView(this)
-            t1.textSize = 20f
+            t1.textSize = 16f
+            t1.setTextColor(Color.WHITE)
+            t1.setLineSpacing(0f, 1.3f)
             info = t1
+            cartaoInfo.addView(t1)
 
+            val cartaoStatus = criarCartao()
             val t2 = TextView(this)
-            t2.textSize = 16f
-            t2.setPadding(0, 32, 0, 32)
+            t2.textSize = 14f
+            t2.setTextColor(textoSuave)
+            t2.text = "Pronto."
             status = t2
+            cartaoStatus.addView(t2)
 
-            val b1 = Button(this)
-            b1.text = "Modo Jogo"
-            b1.setOnClickListener { modoJogo() }
-
-            val b2 = Button(this)
-            b2.text = "Restaurar"
-            b2.setOnClickListener { restaurar() }
-
-            val b3 = Button(this)
-            b3.text = "Ligar overlay (FPS e hora)"
-            b3.setOnClickListener { ligarOverlay() }
-
-            val b4 = Button(this)
-            b4.text = "Desligar overlay"
-            b4.setOnClickListener { desligarOverlay() }
-
-            val b5 = Button(this)
-            b5.text = "Apps protegidos (nao fechar)"
-            b5.setOnClickListener { alternarLista() }
-
-            val lista = LinearLayout(this)
-            lista.orientation = LinearLayout.VERTICAL
+            val lista = criarCartao()
             lista.visibility = View.GONE
             listaApps = lista
 
-            val b6 = Button(this)
-            b6.text = "Atualizar"
-            b6.setOnClickListener { atualizar() }
-
-            layout.addView(t1)
-            layout.addView(t2)
-            layout.addView(b1)
-            layout.addView(b2)
-            layout.addView(b3)
-            layout.addView(b4)
-            layout.addView(b5)
+            layout.addView(titulo)
+            layout.addView(sub)
+            layout.addView(cartaoInfo)
+            layout.addView(cartaoStatus)
+            layout.addView(criarBotao("Modo Jogo", true) { modoJogo() })
+            layout.addView(criarBotao("Restaurar", false) { restaurar() })
+            layout.addView(criarBotao("Ligar overlay (FPS e hora)", false) { ligarOverlay() })
+            layout.addView(criarBotao("Desligar overlay", false) { desligarOverlay() })
+            layout.addView(criarBotao("Apps protegidos (nao fechar)", false) { alternarLista() })
             layout.addView(lista)
-            layout.addView(b6)
+            layout.addView(criarBotao("Atualizar", false) { atualizar() })
             setContentView(scroll)
 
             Shizuku.addRequestPermissionResultListener { _, _ ->
@@ -189,7 +239,8 @@ class MainActivity : Activity() {
             l.removeAllViews()
             val aviso = TextView(this)
             aviso.text = "Marque os apps que NAO devem ser fechados:"
-            aviso.setPadding(0, 16, 0, 16)
+            aviso.setTextColor(laranja)
+            aviso.setPadding(0, 0, 0, dp(8))
             l.addView(aviso)
 
             val salvos = HashSet<String>(prefs().getStringSet("protegidos", emptySet()) ?: emptySet())
@@ -198,6 +249,8 @@ class MainActivity : Activity() {
                 if (fixos.contains(pkg) || pkg == packageName) continue
                 val cb = CheckBox(this)
                 cb.text = packageManager.getApplicationLabel(app).toString()
+                cb.setTextColor(Color.WHITE)
+                cb.buttonTintList = ColorStateList.valueOf(laranja)
                 cb.isChecked = salvos.contains(pkg)
                 cb.setOnCheckedChangeListener { _, marcado ->
                     val atual = HashSet<String>(prefs().getStringSet("protegidos", emptySet()) ?: emptySet())
