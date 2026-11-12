@@ -13,7 +13,7 @@
     </queries>
 
     <application
-        android:label="Meu App FPS"
+        android:label="Sent"
         android:allowBackup="true">
 
         <provider
