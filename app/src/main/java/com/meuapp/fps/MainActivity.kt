@@ -57,3 +57,6 @@ class MainActivity : Activity() {
             info?.text = "RAM livre: $livreMb MB de $totalMb MB\nTemperatura: $temp °C\nBateria: $nivel%"
         } catch (e: Throwable) {
             info?.text = "Erro: " + e.toString()
+                    }
+    }
+}
