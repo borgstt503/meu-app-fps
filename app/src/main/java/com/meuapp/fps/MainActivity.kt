@@ -95,7 +95,7 @@ class MainActivity : Activity() {
             scroll.addView(layout)
 
             val titulo = TextView(this)
-            titulo.text = "Meu App FPS"
+            titulo.text = "Sent"
             titulo.textSize = 28f
             titulo.setTextColor(laranja)
             titulo.setPadding(dp(4), 0, 0, dp(4))
@@ -131,7 +131,9 @@ class MainActivity : Activity() {
             layout.addView(cartaoInfo)
             layout.addView(cartaoStatus)
             layout.addView(criarBotao("Modo Jogo", true) { modoJogo() })
-            layout.addView(criarBotao("Restaurar", false) { restaurar() })
+            layout.addView(criarBotao("Resolução 80%", false) { resolucao(80) })
+            layout.addView(criarBotao("Resolução 60%", false) { resolucao(60) })
+            layout.addView(criarBotao("Restaurar tudo", false) { restaurar() })
             layout.addView(criarBotao("Ligar overlay (FPS e hora)", false) { ligarOverlay() })
             layout.addView(criarBotao("Desligar overlay", false) { desligarOverlay() })
             layout.addView(criarBotao("Apps protegidos (nao fechar)", false) { alternarLista() })
@@ -265,6 +267,32 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun resolucao(pct: Int) {
+        if (!garantirShizuku()) return
+        status?.text = "Ajustando resolução..."
+        Thread {
+            val tam = rodar("wm size")
+            val den = rodar("wm density")
+            val mt = Regex("Physical size: (\\d+)x(\\d+)").find(tam)
+            val md = Regex("Physical density: (\\d+)").find(den)
+            if (mt == null || md == null) {
+                runOnUiThread { status?.text = "Nao consegui ler a resolucao do celular." }
+                return@Thread
+            }
+            val w = mt.groupValues[1].toInt()
+            val h = mt.groupValues[2].toInt()
+            val d = md.groupValues[1].toInt()
+            val nw = (w * pct / 100) / 2 * 2
+            val nh = (h * pct / 100) / 2 * 2
+            val nd = d * pct / 100
+            rodar("wm size " + nw + "x" + nh + "; wm density " + nd)
+            runOnUiThread {
+                status?.text = "Resolução em " + pct + "% (" + nw + "x" + nh +
+                    "). Para voltar ao normal, toque em Restaurar tudo."
+            }
+        }.start()
+    }
+
     private fun modoJogo() {
         if (!garantirShizuku()) return
         status?.text = "Ativando..."
@@ -287,7 +315,7 @@ class MainActivity : Activity() {
             rodar("am kill-all")
             runOnUiThread {
                 status?.text = "Modo Jogo ativado. Nao Perturbe ligado e " + alvos.size +
-                    " apps fechados. Lembre: graficos Suave e FPS Normal no Free Fire."
+                    " apps fechados. No Free Fire: graficos Suave, sombras desligadas e FPS Normal."
                 atualizar()
                 abrirJogo()
             }
@@ -303,10 +331,11 @@ class MainActivity : Activity() {
                 "settings put global zen_mode " + zen + "; " +
                 "settings put global window_animation_scale 1.0; " +
                 "settings put global transition_animation_scale 1.0; " +
-                "settings put global animator_duration_scale 1.0"
+                "settings put global animator_duration_scale 1.0; " +
+                "wm size reset; wm density reset"
             )
             runOnUiThread {
-                status?.text = "Restaurado: Nao Perturbe e animacoes voltaram ao normal."
+                status?.text = "Restaurado: Nao Perturbe, animacoes e resolucao voltaram ao normal."
             }
         }.start()
     }
@@ -314,7 +343,7 @@ class MainActivity : Activity() {
     private fun ligarOverlay() {
         try {
             if (!Settings.canDrawOverlays(this)) {
-                status?.text = "Ative 'Exibir sobre outros apps' para o Meu App FPS e volte aqui."
+                status?.text = "Ative 'Exibir sobre outros apps' para o app e volte aqui."
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + packageName)
