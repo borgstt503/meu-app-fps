@@ -6,8 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -43,14 +45,24 @@ class MainActivity : Activity() {
             b2.setOnClickListener { restaurar() }
 
             val b3 = Button(this)
-            b3.text = "Atualizar"
-            b3.setOnClickListener { atualizar() }
+            b3.text = "Ligar overlay (FPS e hora)"
+            b3.setOnClickListener { ligarOverlay() }
+
+            val b4 = Button(this)
+            b4.text = "Desligar overlay"
+            b4.setOnClickListener { desligarOverlay() }
+
+            val b5 = Button(this)
+            b5.text = "Atualizar"
+            b5.setOnClickListener { atualizar() }
 
             layout.addView(t1)
             layout.addView(t2)
             layout.addView(b1)
             layout.addView(b2)
             layout.addView(b3)
+            layout.addView(b4)
+            layout.addView(b5)
             setContentView(layout)
 
             Shizuku.addRequestPermissionResultListener { _, _ ->
@@ -130,7 +142,7 @@ class MainActivity : Activity() {
                 if (r.startsWith("Erro")) {
                     status?.text = r
                 } else {
-                    status?.text = "Modo Jogo ativado. Lembre: gráficos Suave e FPS Normal dentro do Free Fire."
+                    status?.text = "Modo Jogo ativado. Lembre: graficos Suave e FPS Normal dentro do Free Fire."
                     atualizar()
                     abrirJogo()
                 }
@@ -147,9 +159,36 @@ class MainActivity : Activity() {
                 "settings put global animator_duration_scale 1.0"
             )
             runOnUiThread {
-                status?.text = if (r.startsWith("Erro")) r else "Animações restauradas."
+                status?.text = if (r.startsWith("Erro")) r else "Animacoes restauradas."
             }
         }.start()
+    }
+
+    private fun ligarOverlay() {
+        try {
+            if (!Settings.canDrawOverlays(this)) {
+                status?.text = "Ative 'Exibir sobre outros apps' para o Meu App FPS e volte aqui."
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + packageName)
+                )
+                startActivity(intent)
+                return
+            }
+            startForegroundService(Intent(this, OverlayService::class.java))
+            status?.text = "Overlay ligado. Veja o topo da tela."
+        } catch (e: Throwable) {
+            status?.text = "Erro: " + e.toString()
+        }
+    }
+
+    private fun desligarOverlay() {
+        try {
+            stopService(Intent(this, OverlayService::class.java))
+            status?.text = "Overlay desligado."
+        } catch (e: Throwable) {
+            status?.text = "Erro: " + e.toString()
+        }
     }
 
     private fun abrirJogo() {
