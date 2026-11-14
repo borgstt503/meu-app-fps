@@ -2,8 +2,8 @@ package com.meuapp.fps
 
 import android.app.Activity
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,6 +15,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
@@ -33,7 +34,6 @@ import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
-import rikka.shizuku.Shizuku
 import java.io.File
 
 private class Ferr(val nome: String, val icone: Drawable, val acao: () -> Unit)
@@ -44,8 +44,10 @@ class DesktopActivity : Activity() {
     private var raiz: FrameLayout? = null
     private var menuIniciar: LinearLayout? = null
     private var menuBandeja: LinearLayout? = null
+    private var painelView: View? = null
     private var grade: GridLayout? = null
     private var campoBusca: EditText? = null
+    private var bateriaTxt: TextView? = null
     private var todosApps: List<ResolveInfo> = emptyList()
     private var ferrs: List<Ferr> = emptyList()
 
@@ -83,25 +85,8 @@ class DesktopActivity : Activity() {
         }
     }
 
-    private fun pacoteOpera(): String? {
-        val opcoes = listOf(
-            "com.opera.browser",
-            "com.opera.mini.native",
-            "com.opera.browser.beta",
-            "com.opera.gx"
-        )
-        for (p in opcoes) {
-            try {
-                packageManager.getApplicationInfo(p, 0)
-                return p
-            } catch (e: Throwable) {
-            }
-        }
-        return null
-    }
-
     private fun iconeOpera(): Drawable {
-        val p = pacoteOpera()
+        val p = Atalhos.pacoteOpera(this)
         return if (p != null) iconeDe(p, Color.parseColor("#E62117"))
         else iconeLetra("O", Color.parseColor("#E62117"))
     }
@@ -117,53 +102,6 @@ class DesktopActivity : Activity() {
 
     private fun abrirTela(cls: Class<*>) {
         startActivity(Intent(this, cls))
-    }
-
-    private fun shizukuOk(): Boolean {
-        return try {
-            Shizuku.pingBinder() &&
-                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        } catch (e: Throwable) {
-            false
-        }
-    }
-
-    private fun rodar(comando: String): String {
-        return try {
-            val metodo = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            metodo.isAccessible = true
-            val proc = metodo.invoke(null, arrayOf("sh", "-c", comando), null, null) as Process
-            val saida = proc.inputStream.bufferedReader().readText()
-            proc.waitFor()
-            saida
-        } catch (e: Throwable) {
-            "Erro: " + e.toString()
-        }
-    }
-
-    private fun abrirComoJanela(pacote: String) {
-        if (!shizukuOk()) {
-            Toast.makeText(this, "Shizuku desligado, abrindo em tela cheia", Toast.LENGTH_SHORT).show()
-            abrirApp(pacote)
-            return
-        }
-        Thread {
-            val r = rodar(
-                "am start -p " + pacote +
-                " --windowingMode 5 -a android.intent.action.MAIN" +
-                " -c android.intent.category.LAUNCHER 2>&1"
-            )
-            if (r.isNotBlank()) {
-                runOnUiThread {
-                    Toast.makeText(this, r.take(150), Toast.LENGTH_LONG).show()
-                }
-            }
-        }.start()
     }
 
     private fun abrirJanelaWeb(titulo: String, url: String) {
@@ -190,12 +128,12 @@ class DesktopActivity : Activity() {
     }
 
     private fun velocidadeCursor(v: Int) {
-        if (!shizukuOk()) {
+        if (!Atalhos.shizukuOk()) {
             Toast.makeText(this, "Ligue o Shizuku e autorize o app", Toast.LENGTH_LONG).show()
             return
         }
         Thread {
-            rodar("settings put system pointer_speed " + v)
+            Atalhos.rodar("settings put system pointer_speed " + v)
             runOnUiThread {
                 Toast.makeText(this, "Velocidade do cursor ajustada", Toast.LENGTH_SHORT).show()
             }
@@ -215,7 +153,7 @@ class DesktopActivity : Activity() {
     }
 
     private fun limparApps() {
-        if (!shizukuOk()) {
+        if (!Atalhos.shizukuOk()) {
             Toast.makeText(this, "Ligue o Shizuku e autorize o app", Toast.LENGTH_LONG).show()
             return
         }
@@ -227,9 +165,9 @@ class DesktopActivity : Activity() {
         Toast.makeText(this, "Fechando " + alvos.size + " apps...", Toast.LENGTH_SHORT).show()
         Thread {
             for (p in alvos) {
-                rodar("am force-stop " + p)
+                Atalhos.rodar("am force-stop " + p)
             }
-            rodar("am kill-all")
+            Atalhos.rodar("am kill-all")
             runOnUiThread {
                 Toast.makeText(this, alvos.size.toString() + " apps fechados", Toast.LENGTH_SHORT).show()
             }
@@ -290,17 +228,22 @@ class DesktopActivity : Activity() {
         }
     }
 
+    private fun fecharPainel() {
+        painelView?.let { raiz?.removeView(it) }
+        painelView = null
+    }
+
     private fun fecharMenus() {
         menuIniciar?.visibility = View.GONE
         menuBandeja?.visibility = View.GONE
+        fecharPainel()
     }
 
     private fun alternarIniciar() {
         val m = menuIniciar ?: return
-        menuBandeja?.visibility = View.GONE
-        if (m.visibility == View.VISIBLE) {
-            m.visibility = View.GONE
-        } else {
+        val aberto = m.visibility == View.VISIBLE
+        fecharMenus()
+        if (!aberto) {
             campoBusca?.setText("")
             preencherGrade("")
             m.visibility = View.VISIBLE
@@ -309,8 +252,27 @@ class DesktopActivity : Activity() {
 
     private fun alternarBandeja() {
         val m = menuBandeja ?: return
-        menuIniciar?.visibility = View.GONE
-        m.visibility = if (m.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        val aberto = m.visibility == View.VISIBLE
+        fecharMenus()
+        if (!aberto) m.visibility = View.VISIBLE
+    }
+
+    private fun alternarPainel() {
+        val r = raiz ?: return
+        val aberto = painelView != null
+        fecharMenus()
+        if (aberto) return
+        val v = Painel.build(this) { fecharPainel() }
+        val lp = FrameLayout.LayoutParams(
+            minOf(dp(344), resources.displayMetrics.widthPixels - dp(16)),
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.END
+        )
+        lp.bottomMargin = dp(54)
+        lp.rightMargin = dp(8)
+        v.layoutParams = lp
+        r.addView(v)
+        painelView = v
     }
 
     private fun carregarApps() {
@@ -318,6 +280,12 @@ class DesktopActivity : Activity() {
         principal.addCategory(Intent.CATEGORY_LAUNCHER)
         todosApps = packageManager.queryIntentActivities(principal, 0)
             .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+    }
+
+    private fun atualizarBateria() {
+        val b = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val n = b?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
+        bateriaTxt?.text = "📶  🔊  🔋 " + n + "%"
     }
 
     private fun itemGrade(
@@ -382,7 +350,7 @@ class DesktopActivity : Activity() {
                     nome,
                     ri.loadIcon(packageManager),
                     { abrirApp(pacote) },
-                    { abrirComoJanela(pacote) }
+                    { Atalhos.abrirJanela(this, pacote) }
                 )
             )
         }
@@ -391,7 +359,7 @@ class DesktopActivity : Activity() {
     private fun montarMenuIniciar(): LinearLayout {
         val m = LinearLayout(this)
         m.orientation = LinearLayout.VERTICAL
-        m.background = arred(Color.parseColor("#F2262222"), 12)
+        m.background = arred(Color.parseColor("#F2262222"), 14)
         m.setPadding(dp(16), dp(14), dp(16), dp(10))
         m.visibility = View.GONE
 
@@ -410,7 +378,9 @@ class DesktopActivity : Activity() {
             override fun afterTextChanged(s: Editable?) {
                 preencherGrade(s?.toString() ?: "")
             }
+
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         })
         campoBusca = busca
@@ -462,12 +432,21 @@ class DesktopActivity : Activity() {
         return m
     }
 
+    private fun cab(texto: String): TextView {
+        val t = TextView(this)
+        t.text = texto
+        t.setTextColor(Color.parseColor("#4CC2FF"))
+        t.textSize = 10f
+        t.setPadding(dp(16), dp(10), dp(16), dp(2))
+        return t
+    }
+
     private fun linhaMenu(texto: String, acao: () -> Unit): TextView {
         val t = TextView(this)
         t.text = texto
         t.setTextColor(Color.WHITE)
-        t.textSize = 14f
-        t.setPadding(dp(16), dp(11), dp(16), dp(11))
+        t.textSize = 13f
+        t.setPadding(dp(16), dp(9), dp(16), dp(9))
         t.setOnClickListener {
             fecharMenus()
             acao()
@@ -475,29 +454,62 @@ class DesktopActivity : Activity() {
         return t
     }
 
+    private fun linhaCiclo(texto: () -> String, acao: () -> Unit): TextView {
+        val t = TextView(this)
+        t.text = texto()
+        t.setTextColor(Color.WHITE)
+        t.textSize = 13f
+        t.setPadding(dp(16), dp(9), dp(16), dp(9))
+        t.setOnClickListener {
+            acao()
+            t.text = texto()
+        }
+        return t
+    }
+
     private fun montarMenuBandeja(): LinearLayout {
         val m = LinearLayout(this)
         m.orientation = LinearLayout.VERTICAL
-        m.background = arred(Color.parseColor("#F2262222"), 12)
-        m.setPadding(0, dp(6), 0, dp(6))
+        m.background = arred(Color.parseColor("#F2262222"), 14)
+        m.setPadding(0, dp(4), 0, dp(6))
         m.visibility = View.GONE
 
         val itens = LinearLayout(this)
         itens.orientation = LinearLayout.VERTICAL
+
+        itens.addView(cab("SISTEMA"))
+        itens.addView(linhaMenu("Painel rápido") { alternarPainel() })
         itens.addView(linhaMenu("Fechar apps (liberar RAM)") { limparApps() })
+        itens.addView(linhaMenu("Ajustes") { abrirTela(MainActivity::class.java) })
+
+        itens.addView(cab("JANELAS"))
         itens.addView(linhaMenu("Fechar janelas") { fecharJanelas() })
+        itens.addView(
+            linhaCiclo(
+                { "Tamanho: " + Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)] },
+                { Atalhos.trocarTamanho(this) }
+            )
+        )
+        itens.addView(
+            linhaCiclo(
+                { "Zoom da página: " + Atalhos.zooms[Atalhos.indiceZoom(this)] + "%" },
+                { Atalhos.trocarZoom(this) }
+            )
+        )
+        itens.addView(linhaMenu("Barra do F11") { abrirTela(AtalhosActivity::class.java) })
+
+        itens.addView(cab("CURSOR"))
+        itens.addView(linhaMenu("Lento") { velocidadeCursor(-4) })
+        itens.addView(linhaMenu("Normal") { velocidadeCursor(0) })
+        itens.addView(linhaMenu("Rápido") { velocidadeCursor(5) })
+
+        itens.addView(cab("FUNDO"))
         itens.addView(linhaMenu("Trocar fundo") { escolherFundo() })
         itens.addView(linhaMenu("Fundo padrão") { fundoPadrao() })
-        itens.addView(linhaMenu("Cursor: lento") { velocidadeCursor(-4) })
-        itens.addView(linhaMenu("Cursor: normal") { velocidadeCursor(0) })
-        itens.addView(linhaMenu("Cursor: rápido") { velocidadeCursor(5) })
-                itens.addView(linhaMenu("Painel rápido") { abrirTela(PainelActivity::class.java) })
-        itens.addView(linhaMenu("Barra do F11") { abrirTela(AtalhosActivity::class.java) })
-        itens.addView(linhaMenu("Ajustes") { abrirTela(MainActivity::class.java) })
 
         val scroll = ScrollView(this)
         scroll.addView(itens)
-        val altura = minOf(dp(300), (resources.displayMetrics.heightPixels * 0.6).toInt())
+        val altura = minOf(dp(340), (resources.displayMetrics.heightPixels * 0.65).toInt())
         scroll.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, altura
         )
@@ -535,8 +547,11 @@ class DesktopActivity : Activity() {
     private fun iconeBarra(icone: Drawable, acao: () -> Unit): ImageView {
         val img = ImageView(this)
         img.setImageDrawable(icone)
-        img.layoutParams = LinearLayout.LayoutParams(dp(36), dp(36))
+        img.background = arred(Color.parseColor("#22FFFFFF"), 8)
         img.setPadding(dp(5), dp(5), dp(5), dp(5))
+        val lp = LinearLayout.LayoutParams(dp(36), dp(36))
+        lp.setMargins(dp(3), 0, dp(3), 0)
+        img.layoutParams = lp
         img.setOnClickListener {
             fecharMenus()
             acao()
@@ -544,23 +559,30 @@ class DesktopActivity : Activity() {
         return img
     }
 
-    private fun logoIniciar(): GridLayout {
+    private fun logoIniciar(): LinearLayout {
+        val caixa = LinearLayout(this)
+        caixa.gravity = Gravity.CENTER
+        caixa.background = arred(Color.parseColor("#22FFFFFF"), 8)
+        val lpCaixa = LinearLayout.LayoutParams(dp(36), dp(36))
+        lpCaixa.setMargins(dp(3), 0, dp(6), 0)
+        caixa.layoutParams = lpCaixa
+
         val logo = GridLayout(this)
         logo.rowCount = 2
         logo.columnCount = 2
-        logo.setPadding(dp(10), 0, dp(10), 0)
         for (i in 0 until 4) {
             val q = View(this)
             q.setBackgroundColor(Color.parseColor("#4CC2FF"))
             val lp = GridLayout.LayoutParams()
-            lp.width = dp(9)
-            lp.height = dp(9)
+            lp.width = dp(8)
+            lp.height = dp(8)
             lp.setMargins(dp(1), dp(1), dp(1), dp(1))
             q.layoutParams = lp
             logo.addView(q)
         }
-        logo.setOnClickListener { alternarIniciar() }
-        return logo
+        caixa.addView(logo)
+        caixa.setOnClickListener { alternarIniciar() }
+        return caixa
     }
 
     @Deprecated("Deprecated in Java")
@@ -572,6 +594,7 @@ class DesktopActivity : Activity() {
         super.onResume()
         carregarApps()
         preencherGrade(campoBusca?.text?.toString() ?: "")
+        atualizarBateria()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -641,9 +664,9 @@ class DesktopActivity : Activity() {
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
         barra.gravity = Gravity.CENTER_VERTICAL
-        barra.setBackgroundColor(Color.parseColor("#E6202020"))
+        barra.setBackgroundColor(Color.parseColor("#E61C1C1C"))
         barra.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(44)
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
         )
 
         val esquerda = View(this)
@@ -654,13 +677,13 @@ class DesktopActivity : Activity() {
         centro.gravity = Gravity.CENTER_VERTICAL
 
         val pesquisa = TextView(this)
-        pesquisa.text = "Pesquisar"
+        pesquisa.text = "🔍  Pesquisar"
         pesquisa.setTextColor(Color.parseColor("#D0D0D0"))
         pesquisa.textSize = 12f
         pesquisa.gravity = Gravity.CENTER_VERTICAL
         pesquisa.setPadding(dp(14), 0, dp(14), 0)
-        pesquisa.background = arred(Color.parseColor("#3A3A3A"), 16)
-        val lpPesquisa = LinearLayout.LayoutParams(dp(140), dp(30))
+        pesquisa.background = arred(Color.parseColor("#33FFFFFF"), 18)
+        val lpPesquisa = LinearLayout.LayoutParams(dp(190), dp(32))
         lpPesquisa.leftMargin = dp(2)
         lpPesquisa.rightMargin = dp(8)
         pesquisa.layoutParams = lpPesquisa
@@ -690,7 +713,7 @@ class DesktopActivity : Activity() {
         val direita = LinearLayout(this)
         direita.orientation = LinearLayout.HORIZONTAL
         direita.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        direita.setPadding(0, 0, dp(12), 0)
+        direita.setPadding(0, 0, dp(10), 0)
         direita.layoutParams = LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.MATCH_PARENT, 1f
         )
@@ -700,12 +723,26 @@ class DesktopActivity : Activity() {
         seta.setTextColor(Color.WHITE)
         seta.textSize = 18f
         seta.gravity = Gravity.CENTER
-        seta.setPadding(dp(12), 0, dp(12), 0)
+        seta.setPadding(dp(10), 0, dp(10), 0)
         seta.setOnClickListener { alternarBandeja() }
+
+        val bandeja = TextView(this)
+        bandeja.setTextColor(Color.WHITE)
+        bandeja.textSize = 11f
+        bandeja.gravity = Gravity.CENTER
+        bandeja.setPadding(dp(10), 0, dp(10), 0)
+        bandeja.background = arred(Color.parseColor("#22FFFFFF"), 8)
+        bandeja.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)
+        )
+        bandeja.setOnClickListener { alternarPainel() }
+        bateriaTxt = bandeja
 
         val relogio = LinearLayout(this)
         relogio.orientation = LinearLayout.VERTICAL
         relogio.gravity = Gravity.END
+        relogio.setPadding(dp(10), 0, 0, 0)
+        relogio.setOnClickListener { alternarPainel() }
 
         val hora = TextClock(this)
         hora.format24Hour = "HH:mm"
@@ -723,8 +760,8 @@ class DesktopActivity : Activity() {
 
         relogio.addView(hora)
         relogio.addView(data)
-                relogio.setOnClickListener { abrirTela(PainelActivity::class.java) }
         direita.addView(seta)
+        direita.addView(bandeja)
         direita.addView(relogio)
 
         barra.addView(esquerda)
@@ -741,17 +778,17 @@ class DesktopActivity : Activity() {
             minOf(dp(400), larguraTela - dp(16)), FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         )
-        lpMi.bottomMargin = dp(50)
+        lpMi.bottomMargin = dp(54)
         mi.layoutParams = lpMi
         menuIniciar = mi
         r.addView(mi)
 
         val mb = montarMenuBandeja()
         val lpMb = FrameLayout.LayoutParams(
-            dp(240), FrameLayout.LayoutParams.WRAP_CONTENT,
+            dp(250), FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM or Gravity.END
         )
-        lpMb.bottomMargin = dp(50)
+        lpMb.bottomMargin = dp(54)
         lpMb.rightMargin = dp(8)
         mb.layoutParams = lpMb
         menuBandeja = mb
@@ -760,5 +797,6 @@ class DesktopActivity : Activity() {
         setContentView(r)
         aplicarFundo()
         carregarApps()
+        atualizarBateria()
     }
 }
