@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextClock
@@ -90,9 +91,8 @@ class DesktopActivity : Activity() {
         raiz.orientation = LinearLayout.VERTICAL
         raiz.setBackgroundColor(Color.parseColor("#0B0B12"))
 
-        val area = LinearLayout(this)
-        area.orientation = LinearLayout.HORIZONTAL
-        area.gravity = Gravity.TOP or Gravity.START
+        val area = GridLayout(this)
+        area.columnCount = 4
         area.setPadding(dp(8), dp(24), dp(8), 0)
         area.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
@@ -106,6 +106,16 @@ class DesktopActivity : Activity() {
         area.addView(
             criarIcone("com.google.android.googlequicksearchbox", "Google") {
                 abrirJanelaWeb("Google", "https://www.google.com")
+            }
+        )
+        area.addView(
+            criarIcone("com.android.chrome", "Chrome") {
+                abrirJanelaWeb("Chrome", "https://www.google.com")
+            }
+        )
+        area.addView(
+            criarIcone("com.zhiliaoapp.musically", "TikTok") {
+                abrirJanelaWeb("TikTok", "https://www.tiktok.com")
             }
         )
         area.addView(
@@ -126,13 +136,15 @@ class DesktopActivity : Activity() {
         )
 
         val iniciar = TextView(this)
-        iniciar.text = "Sent"
+        iniciar.text = "Sent (ajustes)"
         iniciar.setTextColor(laranja)
         iniciar.textSize = 18f
         iniciar.layoutParams = LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         )
-        iniciar.setOnClickListener { abrirApp(packageName) }
+        iniciar.setOnClickListener {
+            startActivity(Intent(this, MainActivity::class.java))
+        }
 
         val fechar = TextView(this)
         fechar.text = "Fechar janelas"
