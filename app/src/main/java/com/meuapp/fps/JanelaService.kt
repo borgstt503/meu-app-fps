@@ -16,10 +16,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.ByteArrayInputStream
 
 class JanelaService : Service() {
 
@@ -28,6 +31,16 @@ class JanelaService : Service() {
 
     private val uaPc = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    private val bloqueados = listOf(
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+        "adservice.google", "adnxs.com", "taboola.com", "outbrain.com",
+        "criteo.com", "pubmatic.com", "rubiconproject.com", "openx.net",
+        "amazon-adsystem.com", "popads.net", "propellerads.com",
+        "exoclick.com", "adsterra.com", "mgid.com", "moatads.com",
+        "adcolony.com", "smaato.net", "inmobi.com", "applovin.com",
+        "ads.tiktok.com", "analytics.tiktok.com", "ads.youtube.com"
+    )
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
@@ -143,7 +156,20 @@ class JanelaService : Service() {
         web.settings.setSupportZoom(true)
         web.settings.builtInZoomControls = true
         web.settings.displayZoomControls = false
-        web.webViewClient = WebViewClient()
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): WebResourceResponse? {
+                val host = request?.url?.host
+                if (host != null && bloqueados.any { host.contains(it) }) {
+                    return WebResourceResponse(
+                        "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
+                    )
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
         web.webChromeClient = WebChromeClient()
         web.loadUrl(url)
         web.layoutParams = LinearLayout.LayoutParams(
