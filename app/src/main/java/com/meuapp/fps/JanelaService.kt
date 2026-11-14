@@ -25,6 +25,9 @@ class JanelaService : Service() {
     private var wm: WindowManager? = null
     private val janelas = ArrayList<View>()
 
+    private val uaPc = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
     }
@@ -79,8 +82,10 @@ class JanelaService : Service() {
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun criarJanela(titulo: String, url: String) {
         val m = resources.displayMetrics
-        val largura = (m.widthPixels * 0.5).toInt()
-        val altura = (m.heightPixels * 0.6).toInt()
+        val largura = (m.widthPixels * 0.6).toInt()
+        val altura = (m.heightPixels * 0.7).toInt()
+        val maxW = (m.widthPixels * 0.92).toInt()
+        val maxH = (m.heightPixels * 0.85).toInt()
 
         val raiz = LinearLayout(this)
         raiz.orientation = LinearLayout.VERTICAL
@@ -102,20 +107,28 @@ class JanelaService : Service() {
         val voltar = botao("<")
         val teclado = botao("Teclado")
         val min = botao("-")
+        val max = botao("[]")
         val fechar = botao("X")
 
         barra.addView(t)
         barra.addView(voltar)
         barra.addView(teclado)
         barra.addView(min)
+        barra.addView(max)
         barra.addView(fechar)
 
         val web = WebView(this)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
+        web.settings.userAgentString = uaPc
+        web.settings.useWideViewPort = true
+        web.settings.loadWithOverviewMode = true
+        web.settings.setSupportZoom(true)
+        web.settings.builtInZoomControls = true
+        web.settings.displayZoomControls = false
         web.webViewClient = WebViewClient()
         web.webChromeClient = WebChromeClient()
-        web.loadUrl(url)
+        web.loadUrl(url.replace("m.youtube.com", "www.youtube.com"))
         web.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
@@ -174,12 +187,15 @@ class JanelaService : Service() {
         }
 
         var minimizado = false
+        var maximizado = false
+
         min.setOnClickListener {
             minimizado = !minimizado
             if (minimizado) {
                 web.visibility = View.GONE
                 voltar.visibility = View.GONE
                 teclado.visibility = View.GONE
+                max.visibility = View.GONE
                 params.width = dp(200)
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 min.text = "+"
@@ -187,9 +203,24 @@ class JanelaService : Service() {
                 web.visibility = View.VISIBLE
                 voltar.visibility = View.VISIBLE
                 teclado.visibility = View.VISIBLE
+                max.visibility = View.VISIBLE
+                params.width = if (maximizado) maxW else largura
+                params.height = if (maximizado) maxH else altura
+                min.text = "-"
+            }
+            wm?.updateViewLayout(raiz, params)
+        }
+
+        max.setOnClickListener {
+            maximizado = !maximizado
+            if (maximizado) {
+                params.width = maxW
+                params.height = maxH
+                params.x = dp(10)
+                params.y = dp(20)
+            } else {
                 params.width = largura
                 params.height = altura
-                min.text = "-"
             }
             wm?.updateViewLayout(raiz, params)
         }
