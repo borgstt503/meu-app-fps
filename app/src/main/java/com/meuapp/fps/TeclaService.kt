@@ -3,9 +3,11 @@ package com.meuapp.fps
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -13,7 +15,9 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 
 class TeclaService : AccessibilityService() {
 
@@ -96,8 +100,8 @@ class TeclaService : AccessibilityService() {
         }
     }
 
-    private fun editar() {
-        val i = Intent(this, AtalhosActivity::class.java)
+    private fun abrirTela(cls: Class<*>) {
+        val i = Intent(this, cls)
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(i)
@@ -111,7 +115,7 @@ class TeclaService : AccessibilityService() {
         v.setTextColor(Color.parseColor("#D0D0D0"))
         v.textSize = 20f
         v.gravity = Gravity.CENTER
-        v.setPadding(dp(12), 0, dp(12), 0)
+        v.setPadding(dp(10), 0, dp(10), 0)
         v.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)
         )
@@ -120,6 +124,33 @@ class TeclaService : AccessibilityService() {
             acao()
         }
         return v
+    }
+
+    private fun controleBrilho(): SeekBar {
+        val s = SeekBar(this)
+        s.max = 255
+        s.progress = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        s.progressTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
+        s.thumbTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
+        s.layoutParams = LinearLayout.LayoutParams(dp(110), dp(38))
+        s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {
+                val v = maxOf(sb?.progress ?: 128, 5)
+                if (!Atalhos.shizukuOk()) {
+                    Toast.makeText(this@TeclaService, "Ligue o Shizuku", Toast.LENGTH_SHORT).show()
+                } else {
+                    Thread {
+                        Atalhos.rodar(
+                            "settings put system screen_brightness_mode 0; " +
+                                "settings put system screen_brightness " + v
+                        )
+                    }.start()
+                }
+            }
+        })
+        return s
     }
 
     private fun mostrar() {
@@ -158,8 +189,17 @@ class TeclaService : AccessibilityService() {
             linha.addView(img)
         }
 
+        val sol = TextView(this)
+        sol.text = "☀"
+        sol.setTextColor(Color.parseColor("#D0D0D0"))
+        sol.textSize = 16f
+        sol.setPadding(dp(8), 0, 0, 0)
+        linha.addView(sol)
+        linha.addView(controleBrilho())
+
+        linha.addView(texto("☰") { abrirTela(PainelActivity::class.java) })
         linha.addView(texto("×") { fecharJanelas() })
-        linha.addView(texto("+") { editar() })
+        linha.addView(texto("+") { abrirTela(AtalhosActivity::class.java) })
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
