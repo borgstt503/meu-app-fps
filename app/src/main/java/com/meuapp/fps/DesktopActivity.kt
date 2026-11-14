@@ -1,17 +1,18 @@
 package com.meuapp.fps
 
 import android.app.Activity
-import android.content.pm.PackageManager
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
-import rikka.shizuku.Shizuku
 
 class DesktopActivity : Activity() {
 
@@ -21,34 +22,7 @@ class DesktopActivity : Activity() {
         return (v * resources.displayMetrics.density).toInt()
     }
 
-    private fun shizukuOk(): Boolean {
-        return try {
-            Shizuku.pingBinder() &&
-                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        } catch (e: Throwable) {
-            false
-        }
-    }
-
-    private fun rodar(comando: String): String {
-        return try {
-            val metodo = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            metodo.isAccessible = true
-            val proc = metodo.invoke(null, arrayOf("sh", "-c", comando), null, null) as Process
-            val saida = proc.inputStream.bufferedReader().readText()
-            proc.waitFor()
-            saida
-        } catch (e: Throwable) {
-            "Erro: " + e.toString()
-        }
-    }
-
-    private fun abrirTelaCheia(pacote: String) {
+    private fun abrirApp(pacote: String) {
         val intent = packageManager.getLaunchIntentForPackage(pacote)
         if (intent == null) {
             Toast.makeText(this, "App nao encontrado: " + pacote, Toast.LENGTH_SHORT).show()
@@ -57,22 +31,30 @@ class DesktopActivity : Activity() {
         startActivity(intent)
     }
 
-    private fun abrirJanela(pacote: String) {
-        if (!shizukuOk()) {
-            Toast.makeText(this, "Shizuku desligado, abrindo em tela cheia", Toast.LENGTH_SHORT).show()
-            abrirTelaCheia(pacote)
+    private fun abrirJanelaWeb(titulo: String, url: String) {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Ative 'Exibir sobre outros apps' e volte", Toast.LENGTH_LONG).show()
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + packageName)
+                )
+            )
             return
         }
-        Thread {
-            rodar(
-                "am start -p " + pacote +
-                " --windowingMode 5 -a android.intent.action.MAIN" +
-                " -c android.intent.category.LAUNCHER"
-            )
-        }.start()
+        val i = Intent(this, JanelaService::class.java)
+        i.putExtra("titulo", titulo)
+        i.putExtra("url", url)
+        startForegroundService(i)
     }
 
-    private fun criarIcone(pacote: String, nome: String, janela: Boolean): LinearLayout {
+    private fun fecharJanelas() {
+        val i = Intent(this, JanelaService::class.java)
+        i.putExtra("acao", "fechar")
+        startForegroundService(i)
+    }
+
+    private fun criarIcone(pacote: String, nome: String, acao: () -> Unit): LinearLayout {
         val item = LinearLayout(this)
         item.orientation = LinearLayout.VERTICAL
         item.gravity = Gravity.CENTER_HORIZONTAL
@@ -95,9 +77,7 @@ class DesktopActivity : Activity() {
 
         item.addView(img)
         item.addView(txt)
-        item.setOnClickListener {
-            if (janela) abrirJanela(pacote) else abrirTelaCheia(pacote)
-        }
+        item.setOnClickListener { acao() }
         return item
     }
 
@@ -118,9 +98,21 @@ class DesktopActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
 
-        area.addView(criarIcone("com.google.android.youtube", "YouTube", true))
-        area.addView(criarIcone("com.google.android.googlequicksearchbox", "Google", true))
-        area.addView(criarIcone("com.dts.freefireth", "Free Fire", false))
+        area.addView(
+            criarIcone("com.google.android.youtube", "YouTube") {
+                abrirJanelaWeb("YouTube", "https://m.youtube.com")
+            }
+        )
+        area.addView(
+            criarIcone("com.google.android.googlequicksearchbox", "Google") {
+                abrirJanelaWeb("Google", "https://www.google.com")
+            }
+        )
+        area.addView(
+            criarIcone("com.dts.freefireth", "Free Fire") {
+                abrirApp("com.dts.freefireth")
+            }
+        )
 
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
@@ -140,7 +132,14 @@ class DesktopActivity : Activity() {
         iniciar.layoutParams = LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         )
-        iniciar.setOnClickListener { abrirTelaCheia(packageName) }
+        iniciar.setOnClickListener { abrirApp(packageName) }
+
+        val fechar = TextView(this)
+        fechar.text = "Fechar janelas"
+        fechar.setTextColor(Color.WHITE)
+        fechar.textSize = 14f
+        fechar.setPadding(0, 0, dp(16), 0)
+        fechar.setOnClickListener { fecharJanelas() }
 
         val relogio = TextClock(this)
         relogio.format24Hour = "HH:mm"
@@ -149,6 +148,7 @@ class DesktopActivity : Activity() {
         relogio.textSize = 16f
 
         barra.addView(iniciar)
+        barra.addView(fechar)
         barra.addView(relogio)
 
         raiz.addView(area)
