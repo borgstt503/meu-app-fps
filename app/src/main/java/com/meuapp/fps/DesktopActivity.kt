@@ -1,7 +1,9 @@
 package com.meuapp.fps
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
@@ -13,9 +15,11 @@ import android.view.Gravity
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
+import rikka.shizuku.Shizuku
 import java.io.File
 
 class DesktopActivity : Activity() {
@@ -35,6 +39,53 @@ class DesktopActivity : Activity() {
             return
         }
         startActivity(intent)
+    }
+
+    private fun shizukuOk(): Boolean {
+        return try {
+            Shizuku.pingBinder() &&
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    private fun rodar(comando: String): String {
+        return try {
+            val metodo = Shizuku::class.java.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
+            metodo.isAccessible = true
+            val proc = metodo.invoke(null, arrayOf("sh", "-c", comando), null, null) as Process
+            val saida = proc.inputStream.bufferedReader().readText()
+            proc.waitFor()
+            saida
+        } catch (e: Throwable) {
+            "Erro: " + e.toString()
+        }
+    }
+
+    private fun abrirComoJanela(pacote: String) {
+        if (!shizukuOk()) {
+            Toast.makeText(this, "Shizuku desligado, abrindo em tela cheia", Toast.LENGTH_SHORT).show()
+            abrirApp(pacote)
+            return
+        }
+        Thread {
+            val r = rodar(
+                "am start -p " + pacote +
+                " --windowingMode 5 -a android.intent.action.MAIN" +
+                " -c android.intent.category.LAUNCHER 2>&1"
+            )
+            if (r.isNotBlank()) {
+                runOnUiThread {
+                    Toast.makeText(this, r.take(150), Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     private fun abrirJanelaWeb(titulo: String, url: String) {
@@ -58,6 +109,60 @@ class DesktopActivity : Activity() {
         val i = Intent(this, JanelaService::class.java)
         i.putExtra("acao", "fechar")
         startForegroundService(i)
+    }
+
+    private fun mostrarApps() {
+        val principal = Intent(Intent.ACTION_MAIN)
+        principal.addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = packageManager.queryIntentActivities(principal, 0)
+            .filter { it.activityInfo.packageName != packageName }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+
+        val lista = LinearLayout(this)
+        lista.orientation = LinearLayout.VERTICAL
+        lista.setPadding(dp(12), dp(12), dp(12), dp(12))
+
+        val dica = TextView(this)
+        dica.text = "Toque: abrir normal. Segure: tentar abrir em janela."
+        dica.setTextColor(Color.DKGRAY)
+        dica.textSize = 12f
+        dica.setPadding(0, 0, 0, dp(8))
+        lista.addView(dica)
+
+        val scroll = ScrollView(this)
+        scroll.addView(lista)
+        val dialogo = AlertDialog.Builder(this).setView(scroll).create()
+
+        for (ri in apps) {
+            val pacote = ri.activityInfo.packageName
+            val linha = LinearLayout(this)
+            linha.orientation = LinearLayout.HORIZONTAL
+            linha.gravity = Gravity.CENTER_VERTICAL
+            linha.setPadding(0, dp(8), 0, dp(8))
+
+            val img = ImageView(this)
+            img.setImageDrawable(ri.loadIcon(packageManager))
+            img.layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+
+            val nome = TextView(this)
+            nome.text = ri.loadLabel(packageManager).toString()
+            nome.textSize = 16f
+            nome.setPadding(dp(16), 0, 0, 0)
+
+            linha.addView(img)
+            linha.addView(nome)
+            linha.setOnClickListener {
+                dialogo.dismiss()
+                abrirApp(pacote)
+            }
+            linha.setOnLongClickListener {
+                dialogo.dismiss()
+                abrirComoJanela(pacote)
+                true
+            }
+            lista.addView(linha)
+        }
+        dialogo.show()
     }
 
     private fun escolherFundo() {
@@ -139,6 +244,20 @@ class DesktopActivity : Activity() {
         return item
     }
 
+    private fun botaoBarra(texto: String, acao: () -> Unit): TextView {
+        val t = TextView(this)
+        t.text = texto
+        t.setTextColor(Color.WHITE)
+        t.textSize = 14f
+        t.setPadding(0, 0, dp(16), 0)
+        t.setOnClickListener { acao() }
+        return t
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.parseColor("#0B0B12")
@@ -193,33 +312,13 @@ class DesktopActivity : Activity() {
         )
 
         val iniciar = TextView(this)
-        iniciar.text = "Sent (ajustes)"
+        iniciar.text = "Apps"
         iniciar.setTextColor(laranja)
         iniciar.textSize = 18f
         iniciar.layoutParams = LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         )
-        iniciar.setOnClickListener {
-            startActivity(Intent(this, MainActivity::class.java))
-        }
-
-        val trocar = TextView(this)
-        trocar.text = "Fundo"
-        trocar.setTextColor(Color.WHITE)
-        trocar.textSize = 14f
-        trocar.setPadding(0, 0, dp(16), 0)
-        trocar.setOnClickListener { escolherFundo() }
-        trocar.setOnLongClickListener {
-            fundoPadrao()
-            true
-        }
-
-        val fechar = TextView(this)
-        fechar.text = "Fechar janelas"
-        fechar.setTextColor(Color.WHITE)
-        fechar.textSize = 14f
-        fechar.setPadding(0, 0, dp(16), 0)
-        fechar.setOnClickListener { fecharJanelas() }
+        iniciar.setOnClickListener { mostrarApps() }
 
         val relogio = TextClock(this)
         relogio.format24Hour = "HH:mm"
@@ -228,8 +327,16 @@ class DesktopActivity : Activity() {
         relogio.textSize = 16f
 
         barra.addView(iniciar)
-        barra.addView(trocar)
-        barra.addView(fechar)
+        barra.addView(botaoBarra("Ajustes") {
+            startActivity(Intent(this, MainActivity::class.java))
+        })
+        val fundoBtn = botaoBarra("Fundo") { escolherFundo() }
+        fundoBtn.setOnLongClickListener {
+            fundoPadrao()
+            true
+        }
+        barra.addView(fundoBtn)
+        barra.addView(botaoBarra("Fechar janelas") { fecharJanelas() })
         barra.addView(relogio)
 
         r.addView(area)
