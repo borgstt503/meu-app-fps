@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -69,12 +70,12 @@ class JanelaService : Service() {
     private fun botao(texto: String): TextView {
         val b = TextView(this)
         b.text = texto
-        b.setTextColor(Color.BLACK)
-        b.textSize = 14f
+        b.setTextColor(Color.parseColor("#D0D0D0"))
+        b.textSize = 16f
         b.gravity = Gravity.CENTER
-        b.setPadding(dp(10), 0, dp(10), 0)
+        b.setPadding(dp(11), 0, dp(11), 0)
         b.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)
         )
         return b
     }
@@ -87,28 +88,34 @@ class JanelaService : Service() {
         val maxW = (m.widthPixels * 0.92).toInt()
         val maxH = (m.heightPixels * 0.85).toInt()
 
+        val moldura = GradientDrawable()
+        moldura.setColor(Color.parseColor("#202020"))
+        moldura.cornerRadius = dp(14).toFloat()
+        moldura.setStroke(dp(1), Color.parseColor("#3A3A3A"))
+
         val raiz = LinearLayout(this)
         raiz.orientation = LinearLayout.VERTICAL
-        raiz.setBackgroundColor(Color.parseColor("#1E1E1E"))
+        raiz.background = moldura
+        raiz.clipToOutline = true
 
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
         barra.gravity = Gravity.CENTER_VERTICAL
-        barra.setBackgroundColor(Color.parseColor("#FF8A00"))
-        barra.setPadding(dp(8), 0, dp(4), 0)
+        barra.setBackgroundColor(Color.parseColor("#2B2B2B"))
+        barra.setPadding(dp(12), 0, dp(4), 0)
 
         val t = TextView(this)
         t.text = titulo
-        t.setTextColor(Color.BLACK)
-        t.textSize = 14f
+        t.setTextColor(Color.parseColor("#E8E8E8"))
+        t.textSize = 13f
         t.gravity = Gravity.CENTER_VERTICAL
-        t.layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f)
+        t.layoutParams = LinearLayout.LayoutParams(0, dp(34), 1f)
 
-        val voltar = botao("<")
-        val teclado = botao("Teclado")
-        val min = botao("-")
-        val max = botao("[]")
-        val fechar = botao("X")
+        val voltar = botao("‹")
+        val teclado = botao("Aa")
+        val min = botao("−")
+        val max = botao("□")
+        val fechar = botao("×")
 
         barra.addView(t)
         barra.addView(voltar)
@@ -128,7 +135,7 @@ class JanelaService : Service() {
         web.settings.displayZoomControls = false
         web.webViewClient = WebViewClient()
         web.webChromeClient = WebChromeClient()
-        web.loadUrl(url.replace("m.youtube.com", "www.youtube.com"))
+        web.loadUrl(url)
         web.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
@@ -183,7 +190,9 @@ class JanelaService : Service() {
                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             }
             wm?.updateViewLayout(raiz, params)
-            teclado.text = if (focavel) "Teclado ON" else "Teclado"
+            teclado.setTextColor(
+                if (focavel) Color.parseColor("#4CC2FF") else Color.parseColor("#D0D0D0")
+            )
         }
 
         var minimizado = false
@@ -206,7 +215,7 @@ class JanelaService : Service() {
                 max.visibility = View.VISIBLE
                 params.width = if (maximizado) maxW else largura
                 params.height = if (maximizado) maxH else altura
-                min.text = "-"
+                min.text = "−"
             }
             wm?.updateViewLayout(raiz, params)
         }
