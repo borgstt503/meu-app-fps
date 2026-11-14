@@ -81,6 +81,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".PainelActivity"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar"
+            android:exported="false" />
+
+        <activity
             android:name=".DesktopActivity"
             android:label="Sent"
             android:launchMode="singleTask"
