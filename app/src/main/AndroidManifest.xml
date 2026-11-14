@@ -46,16 +46,11 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
 
         <activity
             android:name=".DesktopActivity"
-            android:label="Sent Desktop"
+            android:label="Sent"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
