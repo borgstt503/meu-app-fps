@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -20,9 +21,29 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.ByteArrayInputStream
+
+private class Moldura(
+    c: Context,
+    private val cursor: View,
+    private val meio: Float
+) : FrameLayout(c) {
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+                cursor.visibility = View.VISIBLE
+                cursor.x = ev.x - meio
+                cursor.y = ev.y - meio
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> cursor.visibility = View.GONE
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+}
 
 class JanelaService : Service() {
 
@@ -106,8 +127,9 @@ class JanelaService : Service() {
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun criarJanela(titulo: String, url: String) {
         val m = resources.displayMetrics
-        val largura = (m.widthPixels * 0.6).toInt()
-        val altura = (m.heightPixels * 0.7).toInt()
+        val frac = Atalhos.tamanhos[Atalhos.indiceTamanho(this)]
+        val largura = (m.widthPixels * frac).toInt()
+        val altura = (m.heightPixels * minOf(0.9f, frac + 0.1f)).toInt()
         val maxW = (m.widthPixels * 0.92).toInt()
         val maxH = (m.heightPixels * 0.85).toInt()
 
@@ -156,6 +178,7 @@ class JanelaService : Service() {
         web.settings.setSupportZoom(true)
         web.settings.builtInZoomControls = true
         web.settings.displayZoomControls = false
+        web.settings.textZoom = Atalhos.zooms[Atalhos.indiceZoom(this)]
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView?,
@@ -172,12 +195,30 @@ class JanelaService : Service() {
         }
         web.webChromeClient = WebChromeClient()
         web.loadUrl(url)
-        web.layoutParams = LinearLayout.LayoutParams(
+
+        val cursor = View(this)
+        val oval = GradientDrawable()
+        oval.shape = GradientDrawable.OVAL
+        oval.setColor(Color.WHITE)
+        oval.setStroke(dp(2), Color.BLACK)
+        cursor.background = oval
+        cursor.visibility = View.GONE
+
+        val area = Moldura(this, cursor, dp(7).toFloat())
+        area.addView(
+            web,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        area.addView(cursor, FrameLayout.LayoutParams(dp(14), dp(14)))
+        area.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
 
         raiz.addView(barra)
-        raiz.addView(web)
+        raiz.addView(area)
 
         val params = WindowManager.LayoutParams(
             largura,
@@ -237,7 +278,7 @@ class JanelaService : Service() {
         min.setOnClickListener {
             minimizado = !minimizado
             if (minimizado) {
-                web.visibility = View.GONE
+                area.visibility = View.GONE
                 voltar.visibility = View.GONE
                 teclado.visibility = View.GONE
                 max.visibility = View.GONE
@@ -245,7 +286,7 @@ class JanelaService : Service() {
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 min.text = "+"
             } else {
-                web.visibility = View.VISIBLE
+                area.visibility = View.VISIBLE
                 voltar.visibility = View.VISIBLE
                 teclado.visibility = View.VISIBLE
                 max.visibility = View.VISIBLE
