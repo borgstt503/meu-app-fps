@@ -67,7 +67,7 @@ class JanelaService : Service() {
         val b = TextView(this)
         b.text = texto
         b.setTextColor(Color.BLACK)
-        b.textSize = 13f
+        b.textSize = 14f
         b.gravity = Gravity.CENTER
         b.setPadding(dp(10), 0, dp(10), 0)
         b.layoutParams = LinearLayout.LayoutParams(
@@ -99,11 +99,15 @@ class JanelaService : Service() {
         t.gravity = Gravity.CENTER_VERTICAL
         t.layoutParams = LinearLayout.LayoutParams(0, dp(36), 1f)
 
+        val voltar = botao("<")
         val teclado = botao("Teclado")
+        val min = botao("-")
         val fechar = botao("X")
 
         barra.addView(t)
+        barra.addView(voltar)
         barra.addView(teclado)
+        barra.addView(min)
         barra.addView(fechar)
 
         val web = WebView(this)
@@ -153,6 +157,10 @@ class JanelaService : Service() {
             true
         }
 
+        voltar.setOnClickListener {
+            if (web.canGoBack()) web.goBack()
+        }
+
         var focavel = false
         teclado.setOnClickListener {
             focavel = !focavel
@@ -163,6 +171,27 @@ class JanelaService : Service() {
             }
             wm?.updateViewLayout(raiz, params)
             teclado.text = if (focavel) "Teclado ON" else "Teclado"
+        }
+
+        var minimizado = false
+        min.setOnClickListener {
+            minimizado = !minimizado
+            if (minimizado) {
+                web.visibility = View.GONE
+                voltar.visibility = View.GONE
+                teclado.visibility = View.GONE
+                params.width = dp(200)
+                params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                min.text = "+"
+            } else {
+                web.visibility = View.VISIBLE
+                voltar.visibility = View.VISIBLE
+                teclado.visibility = View.VISIBLE
+                params.width = largura
+                params.height = altura
+                min.text = "-"
+            }
+            wm?.updateViewLayout(raiz, params)
         }
 
         fechar.setOnClickListener {
