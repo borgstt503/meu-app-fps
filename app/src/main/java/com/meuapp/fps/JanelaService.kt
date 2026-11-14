@@ -45,6 +45,16 @@ class JanelaService : Service() {
         }
         val url = intent?.getStringExtra("url")
         val titulo = intent?.getStringExtra("titulo") ?: "Janela"
+
+        if (titulo == "Opera") {
+            val opera = Atalhos.pacoteOpera(this)
+            if (opera != null) {
+                Atalhos.abrirJanela(this, opera)
+                if (janelas.isEmpty()) stopSelf()
+                return START_NOT_STICKY
+            }
+        }
+
         if (url != null) criarJanela(titulo, url)
         return START_NOT_STICKY
     }
