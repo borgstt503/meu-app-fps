@@ -3,6 +3,9 @@ package com.meuapp.fps
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import rikka.shizuku.Shizuku
 
 object Atalhos {
@@ -20,6 +23,32 @@ object Atalhos {
         "com.opera.browser.beta",
         "com.opera.gx"
     )
+
+    val tamanhos = floatArrayOf(0.4f, 0.6f, 0.8f, 0.95f)
+    val nomesTamanho = listOf("Pequena", "Média", "Grande", "Quase cheia")
+    val zooms = intArrayOf(100, 125, 150, 200)
+
+    private fun prefs(c: Context) = c.getSharedPreferences("cfg", Context.MODE_PRIVATE)
+
+    fun indiceTamanho(c: Context): Int {
+        return prefs(c).getInt("jan_tam", 1).coerceIn(0, 3)
+    }
+
+    fun indiceZoom(c: Context): Int {
+        return prefs(c).getInt("jan_zoom", 0).coerceIn(0, 3)
+    }
+
+    fun trocarTamanho(c: Context): Int {
+        val n = (indiceTamanho(c) + 1) % 4
+        prefs(c).edit().putInt("jan_tam", n).apply()
+        return n
+    }
+
+    fun trocarZoom(c: Context): Int {
+        val n = (indiceZoom(c) + 1) % 4
+        prefs(c).edit().putInt("jan_zoom", n).apply()
+        return n
+    }
 
     fun pacoteOpera(c: Context): String? {
         for (p in operas) {
@@ -69,6 +98,13 @@ object Atalhos {
         }
     }
 
+    fun aviso(c: Context, msg: String) {
+        val app = c.applicationContext
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(app, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun abrirNormal(c: Context, pacote: String) {
         val i = c.packageManager.getLaunchIntentForPackage(pacote) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -80,15 +116,22 @@ object Atalhos {
 
     fun abrirJanela(c: Context, pacote: String) {
         if (!shizukuOk()) {
+            aviso(c, "Shizuku desligado: abrindo em tela cheia")
+            abrirNormal(c, pacote)
+            return
+        }
+        val comp = c.packageManager.getLaunchIntentForPackage(pacote)
+            ?.component?.flattenToShortString()
+        if (comp == null) {
             abrirNormal(c, pacote)
             return
         }
         Thread {
-            rodar(
-                "am start -p " + pacote +
-                " --windowingMode 5 -a android.intent.action.MAIN" +
-                " -c android.intent.category.LAUNCHER"
-            )
+            val r = rodar("am start -n " + comp + " --windowingMode 5 -f 0x10000000 2>&1")
+            if (r.contains("Error", true) || r.contains("Exception", true)) {
+                aviso(c, "Janela livre falhou: " + r.take(140))
+                abrirNormal(c, pacote)
+            }
         }.start()
     }
 }
