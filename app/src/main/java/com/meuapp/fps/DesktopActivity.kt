@@ -491,6 +491,8 @@ class DesktopActivity : Activity() {
         itens.addView(linhaMenu("Cursor: lento") { velocidadeCursor(-4) })
         itens.addView(linhaMenu("Cursor: normal") { velocidadeCursor(0) })
         itens.addView(linhaMenu("Cursor: rápido") { velocidadeCursor(5) })
+                itens.addView(linhaMenu("Painel rápido") { abrirTela(PainelActivity::class.java) })
+        itens.addView(linhaMenu("Barra do F11") { abrirTela(AtalhosActivity::class.java) })
         itens.addView(linhaMenu("Ajustes") { abrirTela(MainActivity::class.java) })
 
         val scroll = ScrollView(this)
@@ -721,6 +723,7 @@ class DesktopActivity : Activity() {
 
         relogio.addView(hora)
         relogio.addView(data)
+                relogio.setOnClickListener { abrirTela(PainelActivity::class.java) }
         direita.addView(seta)
         direita.addView(relogio)
 
