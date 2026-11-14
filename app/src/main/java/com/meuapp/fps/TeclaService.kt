@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -17,12 +18,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
-import android.widget.Toast
 
 class TeclaService : AccessibilityService() {
 
     private var wm: WindowManager? = null
     private var barra: View? = null
+    private var painel: View? = null
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
@@ -43,7 +44,16 @@ class TeclaService : AccessibilityService() {
         return false
     }
 
+    private fun esconderPainel() {
+        try {
+            painel?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        painel = null
+    }
+
     private fun esconder() {
+        esconderPainel()
         try {
             barra?.let { wm?.removeView(it) }
         } catch (e: Throwable) {
@@ -73,7 +83,7 @@ class TeclaService : AccessibilityService() {
             lista.add("com.google.android.youtube")
             lista.add("com.zhiliaoapp.musically")
         }
-        return lista.filter { existe(it) }
+        return lista.filter { existe(it) }.sortedBy { Atalhos.nomeDe(this, it).lowercase() }
     }
 
     private fun abrir(pacote: String) {
@@ -109,7 +119,39 @@ class TeclaService : AccessibilityService() {
         }
     }
 
-    private fun texto(t: String, acao: () -> Unit): TextView {
+    private fun alternarPainel() {
+        if (painel != null) {
+            esconderPainel()
+            return
+        }
+        if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        val v = Painel.build(this) { esconderPainel() }
+        val largura = minOf(dp(344), resources.displayMetrics.widthPixels - dp(20))
+        val params = WindowManager.LayoutParams(
+            largura,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.END
+        params.y = dp(64)
+        params.x = dp(10)
+        v.setOnTouchListener { _, e ->
+            if (e.action == MotionEvent.ACTION_OUTSIDE) {
+                esconderPainel()
+                true
+            } else {
+                false
+            }
+        }
+        wm?.addView(v, params)
+        painel = v
+    }
+
+    private fun texto(t: String, fechaBarra: Boolean, acao: () -> Unit): TextView {
         val v = TextView(this)
         v.text = t
         v.setTextColor(Color.parseColor("#D0D0D0"))
@@ -120,7 +162,7 @@ class TeclaService : AccessibilityService() {
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)
         )
         v.setOnClickListener {
-            esconder()
+            if (fechaBarra) esconder()
             acao()
         }
         return v
@@ -135,11 +177,13 @@ class TeclaService : AccessibilityService() {
         s.layoutParams = LinearLayout.LayoutParams(dp(110), dp(38))
         s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
+
             override fun onStartTrackingTouch(sb: SeekBar?) {}
+
             override fun onStopTrackingTouch(sb: SeekBar?) {
                 val v = maxOf(sb?.progress ?: 128, 5)
                 if (!Atalhos.shizukuOk()) {
-                    Toast.makeText(this@TeclaService, "Ligue o Shizuku", Toast.LENGTH_SHORT).show()
+                    Atalhos.aviso(this@TeclaService, "Ligue o Shizuku")
                 } else {
                     Thread {
                         Atalhos.rodar(
@@ -197,9 +241,9 @@ class TeclaService : AccessibilityService() {
         linha.addView(sol)
         linha.addView(controleBrilho())
 
-        linha.addView(texto("☰") { abrirTela(PainelActivity::class.java) })
-        linha.addView(texto("×") { fecharJanelas() })
-        linha.addView(texto("+") { abrirTela(AtalhosActivity::class.java) })
+        linha.addView(texto("☰", false) { alternarPainel() })
+        linha.addView(texto("×", true) { fecharJanelas() })
+        linha.addView(texto("+", true) { abrirTela(AtalhosActivity::class.java) })
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
