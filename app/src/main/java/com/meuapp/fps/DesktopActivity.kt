@@ -1,12 +1,12 @@
 package com.meuapp.fps
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -34,7 +34,6 @@ import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
-import java.io.File
 
 private class Ferr(val nome: String, val icone: Drawable, val acao: () -> Unit)
 
@@ -50,6 +49,11 @@ class DesktopActivity : Activity() {
     private var bateriaTxt: TextView? = null
     private var todosApps: List<ResolveInfo> = emptyList()
     private var ferrs: List<Ferr> = emptyList()
+    private val tf by lazy { Atalhos.typeface(this) }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(Atalhos.comEscala(newBase))
+    }
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
@@ -184,48 +188,21 @@ class DesktopActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == pedirFundo && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
-            try {
-                contentResolver.openInputStream(uri)?.use { entrada ->
-                    File(filesDir, "fundo.img").outputStream().use { saida ->
-                        entrada.copyTo(saida)
-                    }
-                }
+            if (Atalhos.salvarFundo(this, uri)) {
                 aplicarFundo()
-            } catch (e: Throwable) {
+            } else {
                 Toast.makeText(this, "Erro ao trocar o fundo", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun fundoPadrao() {
-        File(filesDir, "fundo.img").delete()
+        Atalhos.apagarFundo(this)
         aplicarFundo()
     }
 
     private fun aplicarFundo() {
-        val r = raiz ?: return
-        val padrao = GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.parseColor("#1B1B2F"), Color.parseColor("#7A1F3D"))
-        )
-        val f = File(filesDir, "fundo.img")
-        if (!f.exists()) {
-            r.background = padrao
-            return
-        }
-        try {
-            val o = BitmapFactory.Options()
-            o.inJustDecodeBounds = true
-            BitmapFactory.decodeFile(f.path, o)
-            var s = 1
-            while (o.outWidth / s > 2000 || o.outHeight / s > 2000) s *= 2
-            val o2 = BitmapFactory.Options()
-            o2.inSampleSize = s
-            val bmp = BitmapFactory.decodeFile(f.path, o2)
-            if (bmp != null) r.background = BitmapDrawable(resources, bmp) else r.background = padrao
-        } catch (e: Throwable) {
-            r.background = padrao
-        }
+        raiz?.background = Atalhos.fundoDrawable(this)
     }
 
     private fun fecharPainel() {
@@ -263,6 +240,7 @@ class DesktopActivity : Activity() {
         fecharMenus()
         if (aberto) return
         val v = Painel.build(this) { fecharPainel() }
+        Atalhos.aplicarFonte(v, tf)
         val lp = FrameLayout.LayoutParams(
             minOf(dp(344), resources.displayMetrics.widthPixels - dp(16)),
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -285,7 +263,7 @@ class DesktopActivity : Activity() {
     private fun atualizarBateria() {
         val b = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val n = b?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
-        bateriaTxt?.text = "📶  🔊  🔋 " + n + "%"
+        bateriaTxt?.text = n.toString() + "%"
     }
 
     private fun itemGrade(
@@ -331,6 +309,7 @@ class DesktopActivity : Activity() {
                 true
             }
         }
+        Atalhos.aplicarFonte(item, tf)
         return item
     }
 
@@ -407,7 +386,7 @@ class DesktopActivity : Activity() {
         rodape.setPadding(dp(4), dp(10), dp(4), 0)
 
         val ajustes = TextView(this)
-        ajustes.text = "Ajustes"
+        ajustes.text = "Configurações"
         ajustes.setTextColor(Color.WHITE)
         ajustes.textSize = 13f
         ajustes.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -480,32 +459,72 @@ class DesktopActivity : Activity() {
         itens.addView(cab("SISTEMA"))
         itens.addView(linhaMenu("Painel rápido") { alternarPainel() })
         itens.addView(linhaMenu("Fechar apps (liberar RAM)") { limparApps() })
-        itens.addView(linhaMenu("Ajustes") { abrirTela(MainActivity::class.java) })
+        itens.addView(linhaMenu("Configurações") { abrirTela(MainActivity::class.java) })
 
         itens.addView(cab("JANELAS"))
         itens.addView(linhaMenu("Fechar janelas") { fecharJanelas() })
         itens.addView(
+            linhaMenu("Tamanho: " + Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)]) {
+                Atalhos.escolher(this, "Tamanho das janelas", Atalhos.nomesTamanho) { i ->
+                    Atalhos.setI(this, "jan_tam", i)
+                    recreate()
+                }
+            }
+        )
+        itens.addView(
+            linhaMenu("Zoom da página: " + Atalhos.nomesZoom[Atalhos.indiceZoom(this)]) {
+                Atalhos.escolher(this, "Zoom da página", Atalhos.nomesZoom) { i ->
+                    Atalhos.setI(this, "jan_zoom", i)
+                    recreate()
+                }
+            }
+        )
+        itens.addView(
             linhaCiclo(
-                { "Tamanho: " + Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)] },
-                { Atalhos.trocarTamanho(this) }
+                { "Apps reais (com login): " + (if (Atalhos.modoApp(this)) "Sim" else "Não") },
+                { Atalhos.setB(this, "modo_app", !Atalhos.modoApp(this)) }
             )
         )
         itens.addView(
             linhaCiclo(
-                { "Zoom da página: " + Atalhos.zooms[Atalhos.indiceZoom(this)] + "%" },
-                { Atalhos.trocarZoom(this) }
+                { "Bloqueio de anúncios: " + (if (Atalhos.bloqueio(this)) "Sim" else "Não") },
+                { Atalhos.setB(this, "bloq", !Atalhos.bloqueio(this)) }
             )
         )
         itens.addView(linhaMenu("Barra do F11") { abrirTela(AtalhosActivity::class.java) })
 
-        itens.addView(cab("CURSOR"))
-        itens.addView(linhaMenu("Lento") { velocidadeCursor(-4) })
-        itens.addView(linhaMenu("Normal") { velocidadeCursor(0) })
-        itens.addView(linhaMenu("Rápido") { velocidadeCursor(5) })
-
-        itens.addView(cab("FUNDO"))
+        itens.addView(cab("APARÊNCIA"))
+        itens.addView(
+            linhaMenu("Escala do app: " + Atalhos.nomesEscala[Atalhos.indiceEscala(this)]) {
+                Atalhos.escolher(this, "Escala do app", Atalhos.nomesEscala) { i ->
+                    Atalhos.setI(this, "escala", i)
+                    recreate()
+                }
+            }
+        )
+        itens.addView(
+            linhaMenu("Fonte: " + Atalhos.fontes[Atalhos.indiceFonte(this)].second) {
+                Atalhos.escolher(this, "Fonte", Atalhos.fontes.map { it.second }) { i ->
+                    Atalhos.setI(this, "fonte", i)
+                    recreate()
+                }
+            }
+        )
+        itens.addView(
+            linhaMenu("Cursor: " + Atalhos.cursores[Atalhos.indiceCursor(this)]) {
+                Atalhos.escolher(this, "Cursor", Atalhos.cursores) { i ->
+                    Atalhos.setI(this, "cursor", i)
+                    recreate()
+                }
+            }
+        )
         itens.addView(linhaMenu("Trocar fundo") { escolherFundo() })
         itens.addView(linhaMenu("Fundo padrão") { fundoPadrao() })
+
+        itens.addView(cab("MOUSE"))
+        itens.addView(linhaMenu("Velocidade lenta") { velocidadeCursor(-4) })
+        itens.addView(linhaMenu("Velocidade normal") { velocidadeCursor(0) })
+        itens.addView(linhaMenu("Velocidade rápida") { velocidadeCursor(5) })
 
         val scroll = ScrollView(this)
         scroll.addView(itens)
@@ -547,9 +566,8 @@ class DesktopActivity : Activity() {
     private fun iconeBarra(icone: Drawable, acao: () -> Unit): ImageView {
         val img = ImageView(this)
         img.setImageDrawable(icone)
-        img.background = arred(Color.parseColor("#22FFFFFF"), 8)
-        img.setPadding(dp(5), dp(5), dp(5), dp(5))
-        val lp = LinearLayout.LayoutParams(dp(36), dp(36))
+        img.setPadding(dp(4), dp(4), dp(4), dp(4))
+        val lp = LinearLayout.LayoutParams(dp(34), dp(34))
         lp.setMargins(dp(3), 0, dp(3), 0)
         img.layoutParams = lp
         img.setOnClickListener {
@@ -559,11 +577,9 @@ class DesktopActivity : Activity() {
         return img
     }
 
-    private fun logoIniciar(): LinearLayout {
-        val caixa = LinearLayout(this)
-        caixa.gravity = Gravity.CENTER
-        caixa.background = arred(Color.parseColor("#22FFFFFF"), 8)
-        val lpCaixa = LinearLayout.LayoutParams(dp(36), dp(36))
+    private fun logoIniciar(): FrameLayout {
+        val caixa = FrameLayout(this)
+        val lpCaixa = LinearLayout.LayoutParams(dp(34), dp(34))
         lpCaixa.setMargins(dp(3), 0, dp(6), 0)
         caixa.layoutParams = lpCaixa
 
@@ -574,13 +590,20 @@ class DesktopActivity : Activity() {
             val q = View(this)
             q.setBackgroundColor(Color.parseColor("#4CC2FF"))
             val lp = GridLayout.LayoutParams()
-            lp.width = dp(8)
-            lp.height = dp(8)
+            lp.width = dp(9)
+            lp.height = dp(9)
             lp.setMargins(dp(1), dp(1), dp(1), dp(1))
             q.layoutParams = lp
             logo.addView(q)
         }
-        caixa.addView(logo)
+        caixa.addView(
+            logo,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
         caixa.setOnClickListener { alternarIniciar() }
         return caixa
     }
@@ -661,31 +684,33 @@ class DesktopActivity : Activity() {
             area.addView(iconeDesktop(f.icone, f.nome, f.acao))
         }
 
-        val barra = LinearLayout(this)
-        barra.orientation = LinearLayout.HORIZONTAL
-        barra.gravity = Gravity.CENTER_VERTICAL
+        val barra = FrameLayout(this)
         barra.setBackgroundColor(Color.parseColor("#E61C1C1C"))
         barra.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
         )
 
-        val esquerda = View(this)
-        esquerda.layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+        val filete = View(this)
+        filete.setBackgroundColor(Color.parseColor("#26FFFFFF"))
+        barra.addView(
+            filete,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(1))
+        )
 
         val centro = LinearLayout(this)
         centro.orientation = LinearLayout.HORIZONTAL
         centro.gravity = Gravity.CENTER_VERTICAL
+        centro.setPadding(0, dp(1), 0, 0)
 
         val pesquisa = TextView(this)
-        pesquisa.text = "🔍  Pesquisar"
+        pesquisa.text = "Pesquisar"
         pesquisa.setTextColor(Color.parseColor("#D0D0D0"))
         pesquisa.textSize = 12f
         pesquisa.gravity = Gravity.CENTER_VERTICAL
-        pesquisa.setPadding(dp(14), 0, dp(14), 0)
-        pesquisa.background = arred(Color.parseColor("#33FFFFFF"), 18)
-        val lpPesquisa = LinearLayout.LayoutParams(dp(190), dp(32))
-        lpPesquisa.leftMargin = dp(2)
-        lpPesquisa.rightMargin = dp(8)
+        pesquisa.setPadding(dp(16), 0, dp(16), 0)
+        pesquisa.background = arred(Color.parseColor("#2EFFFFFF"), 16)
+        val lpPesquisa = LinearLayout.LayoutParams(dp(150), dp(30))
+        lpPesquisa.rightMargin = dp(10)
         pesquisa.layoutParams = lpPesquisa
         pesquisa.setOnClickListener { alternarIniciar() }
 
@@ -710,13 +735,19 @@ class DesktopActivity : Activity() {
             abrirApp("moe.shizuku.privileged.api")
         })
 
+        barra.addView(
+            centro,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER_HORIZONTAL
+            )
+        )
+
         val direita = LinearLayout(this)
         direita.orientation = LinearLayout.HORIZONTAL
-        direita.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        direita.setPadding(0, 0, dp(10), 0)
-        direita.layoutParams = LinearLayout.LayoutParams(
-            0, LinearLayout.LayoutParams.MATCH_PARENT, 1f
-        )
+        direita.gravity = Gravity.CENTER_VERTICAL
+        direita.setPadding(0, dp(1), dp(10), 0)
 
         val seta = TextView(this)
         seta.text = "^"
@@ -729,19 +760,21 @@ class DesktopActivity : Activity() {
         val bandeja = TextView(this)
         bandeja.setTextColor(Color.WHITE)
         bandeja.textSize = 11f
+        bandeja.maxLines = 1
         bandeja.gravity = Gravity.CENTER
         bandeja.setPadding(dp(10), 0, dp(10), 0)
         bandeja.background = arred(Color.parseColor("#22FFFFFF"), 8)
-        bandeja.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)
+        val lpBandeja = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)
         )
+        lpBandeja.rightMargin = dp(8)
+        bandeja.layoutParams = lpBandeja
         bandeja.setOnClickListener { alternarPainel() }
         bateriaTxt = bandeja
 
         val relogio = LinearLayout(this)
         relogio.orientation = LinearLayout.VERTICAL
         relogio.gravity = Gravity.END
-        relogio.setPadding(dp(10), 0, 0, 0)
         relogio.setOnClickListener { alternarPainel() }
 
         val hora = TextClock(this)
@@ -749,13 +782,15 @@ class DesktopActivity : Activity() {
         hora.format12Hour = "HH:mm"
         hora.setTextColor(Color.WHITE)
         hora.textSize = 11f
+        hora.maxLines = 1
         hora.gravity = Gravity.END
 
         val data = TextClock(this)
-        data.format24Hour = "dd-MM-yyyy"
-        data.format12Hour = "dd-MM-yyyy"
-        data.setTextColor(Color.WHITE)
+        data.format24Hour = "dd/MM/yyyy"
+        data.format12Hour = "dd/MM/yyyy"
+        data.setTextColor(Color.parseColor("#D0D0D0"))
         data.textSize = 10f
+        data.maxLines = 1
         data.gravity = Gravity.END
 
         relogio.addView(hora)
@@ -764,9 +799,14 @@ class DesktopActivity : Activity() {
         direita.addView(bandeja)
         direita.addView(relogio)
 
-        barra.addView(esquerda)
-        barra.addView(centro)
-        barra.addView(direita)
+        barra.addView(
+            direita,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.END
+            )
+        )
 
         coluna.addView(area)
         coluna.addView(barra)
@@ -795,7 +835,9 @@ class DesktopActivity : Activity() {
         r.addView(mb)
 
         setContentView(r)
+        r.pointerIcon = Atalhos.pointerIcon(this)
         aplicarFundo()
+        Atalhos.aplicarFonte(r, tf)
         carregarApps()
         atualizarBateria()
     }
