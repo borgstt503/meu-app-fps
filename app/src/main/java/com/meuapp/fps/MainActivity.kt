@@ -14,25 +14,24 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import rikka.shizuku.Shizuku
 
 class MainActivity : Activity() {
 
     private var info: TextView? = null
-    private var status: TextView? = null
     private var listaApps: LinearLayout? = null
 
-    private val corFundo = Color.parseColor("#121212")
-    private val corCartao = Color.parseColor("#1E1E1E")
-    private val corBotao = Color.parseColor("#2A2A2A")
-    private val laranja = Color.parseColor("#FF8A00")
-    private val textoSuave = Color.parseColor("#B0B0B0")
+    private val corFundo = Color.parseColor("#202020")
+    private val corCartao = Color.parseColor("#2B2B2B")
+    private val suave = Color.parseColor("#A8A8A8")
+    private val azul = Color.parseColor("#4CC2FF")
 
     private val fixos = setOf(
         "com.dts.freefireth",
@@ -44,40 +43,54 @@ class MainActivity : Activity() {
         return (v * resources.displayMetrics.density).toInt()
     }
 
-    private fun fundoArredondado(cor: Int, raio: Int): GradientDrawable {
+    private fun arred(cor: Int, raio: Int): GradientDrawable {
         val g = GradientDrawable()
         g.setColor(cor)
         g.cornerRadius = dp(raio).toFloat()
         return g
     }
 
-    private fun criarCartao(): LinearLayout {
+    private fun aviso(msg: String) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+    }
+
+    private fun cartao(): LinearLayout {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
-        c.background = fundoArredondado(corCartao, 16)
-        c.setPadding(dp(20), dp(16), dp(20), dp(16))
+        c.background = arred(corCartao, 8)
+        c.setPadding(dp(16), dp(12), dp(16), dp(12))
         val lp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        lp.bottomMargin = dp(12)
+        lp.bottomMargin = dp(6)
         c.layoutParams = lp
         return c
     }
 
-    private fun criarBotao(texto: String, principal: Boolean, acao: () -> Unit): Button {
-        val b = Button(this)
-        b.text = texto
-        b.isAllCaps = false
-        b.textSize = if (principal) 18f else 15f
-        b.setTextColor(if (principal) Color.BLACK else Color.WHITE)
-        b.background = fundoArredondado(if (principal) laranja else corBotao, 14)
-        val altura = if (principal) dp(60) else dp(50)
-        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, altura)
-        lp.bottomMargin = dp(10)
-        b.layoutParams = lp
-        b.setOnClickListener { acao() }
-        return b
+    private fun linha(titulo: String, sub: String, acao: () -> Unit): LinearLayout {
+        val c = cartao()
+        val t = TextView(this)
+        t.text = titulo
+        t.setTextColor(Color.WHITE)
+        t.textSize = 15f
+        val s = TextView(this)
+        s.text = sub
+        s.setTextColor(suave)
+        s.textSize = 12f
+        c.addView(t)
+        c.addView(s)
+        c.setOnClickListener { acao() }
+        return c
+    }
+
+    private fun rotulo(texto: String): TextView {
+        val t = TextView(this)
+        t.text = texto
+        t.setTextColor(azul)
+        t.textSize = 12f
+        t.setPadding(dp(4), dp(14), 0, dp(6))
+        return t
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,62 +102,76 @@ class MainActivity : Activity() {
             val scroll = ScrollView(this)
             scroll.setBackgroundColor(corFundo)
 
-            val layout = LinearLayout(this)
-            layout.orientation = LinearLayout.VERTICAL
-            layout.setPadding(dp(20), dp(40), dp(20), dp(40))
-            scroll.addView(layout)
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            col.setPadding(dp(16), dp(12), dp(16), dp(28))
+            scroll.addView(col)
+
+            val topo = LinearLayout(this)
+            topo.orientation = LinearLayout.HORIZONTAL
+            topo.gravity = Gravity.CENTER_VERTICAL
+            topo.setPadding(0, 0, 0, dp(8))
+
+            val voltar = TextView(this)
+            voltar.text = "<"
+            voltar.setTextColor(Color.WHITE)
+            voltar.textSize = 24f
+            voltar.setPadding(dp(4), 0, dp(20), 0)
+            voltar.setOnClickListener { finish() }
 
             val titulo = TextView(this)
-            titulo.text = "Sent"
-            titulo.textSize = 28f
-            titulo.setTextColor(laranja)
-            titulo.setPadding(dp(4), 0, 0, dp(4))
+            titulo.text = "Configurações"
+            titulo.setTextColor(Color.WHITE)
+            titulo.textSize = 22f
 
-            val sub = TextView(this)
-            sub.text = "Desempenho para o Free Fire"
-            sub.textSize = 14f
-            sub.setTextColor(textoSuave)
-            sub.setPadding(dp(4), 0, 0, dp(20))
+            topo.addView(voltar)
+            topo.addView(titulo)
+            col.addView(topo)
 
-            val cartaoInfo = criarCartao()
+            val cartaoInfo = cartao()
+            val nomePc = TextView(this)
+            nomePc.text = "Este PC"
+            nomePc.setTextColor(Color.WHITE)
+            nomePc.textSize = 18f
             val t1 = TextView(this)
-            t1.textSize = 16f
-            t1.setTextColor(Color.WHITE)
-            t1.setLineSpacing(0f, 1.3f)
+            t1.setTextColor(suave)
+            t1.textSize = 13f
+            t1.setLineSpacing(0f, 1.25f)
             info = t1
+            cartaoInfo.addView(nomePc)
             cartaoInfo.addView(t1)
+            col.addView(cartaoInfo)
 
-            val cartaoStatus = criarCartao()
-            val t2 = TextView(this)
-            t2.textSize = 14f
-            t2.setTextColor(textoSuave)
-            t2.text = "Pronto."
-            status = t2
-            cartaoStatus.addView(t2)
-
-            val lista = criarCartao()
+            col.addView(rotulo("Jogo"))
+            col.addView(linha("Modo Jogo", "Fecha apps, liga Não Perturbe e reduz animações") { modoJogo() })
+            col.addView(linha("Restaurar", "Volta Não Perturbe e animações ao normal") { restaurar() })
+            col.addView(linha("Apps protegidos", "Escolha os apps que nunca são fechados") { alternarLista() })
+            val lista = cartao()
             lista.visibility = View.GONE
             listaApps = lista
+            col.addView(lista)
 
-            layout.addView(titulo)
-            layout.addView(sub)
-            layout.addView(cartaoInfo)
-            layout.addView(cartaoStatus)
-            layout.addView(criarBotao("Modo Jogo", true) { modoJogo() })
-            layout.addView(criarBotao("Resolução 80%", false) { resolucao(80) })
-            layout.addView(criarBotao("Resolução 60%", false) { resolucao(60) })
-            layout.addView(criarBotao("Restaurar tudo", false) { restaurar() })
-            layout.addView(criarBotao("Ligar overlay (FPS e hora)", false) { ligarOverlay() })
-            layout.addView(criarBotao("Desligar overlay", false) { desligarOverlay() })
-            layout.addView(criarBotao("Apps protegidos (nao fechar)", false) { alternarLista() })
-            layout.addView(lista)
-            layout.addView(criarBotao("Atualizar", false) { atualizar() })
+            col.addView(rotulo("Overlay de FPS"))
+            col.addView(linha("Ligar overlay", "FPS e hora no topo da tela") { ligarOverlay() })
+            col.addView(linha("Desligar overlay", "Remove o texto do topo") { desligarOverlay() })
+
+            col.addView(rotulo("Janelas livres"))
+            col.addView(linha("Ativar janelas livres", "Depois reinicie o celular") { ativarJanelas(true) })
+            col.addView(linha("Desativar janelas livres", "Depois reinicie o celular") { ativarJanelas(false) })
+
+            col.addView(rotulo("Sistema"))
+            col.addView(linha("Lançador padrão", "Escolha o Sent como tela inicial") {
+                startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+            })
+            col.addView(linha("Atalho F11 / F5", "Ative o serviço Sent atalhos em Acessibilidade") {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            })
+
             setContentView(scroll)
 
             Shizuku.addRequestPermissionResultListener { _, _ ->
                 runOnUiThread { atualizar() }
             }
-
             atualizar()
         } catch (e: Throwable) {
             val erro = TextView(this)
@@ -173,15 +200,15 @@ class MainActivity : Activity() {
 
     private fun garantirShizuku(): Boolean {
         if (!shizukuRodando()) {
-            status?.text = "Shizuku nao esta rodando. Abra o Shizuku e toque em Iniciar."
+            aviso("Shizuku não está rodando. Abra o Shizuku e toque em Iniciar.")
             return false
         }
         if (!shizukuAutorizado()) {
-            status?.text = "Autorize o app na janelinha do Shizuku e toque no botao de novo."
+            aviso("Autorize o app na janelinha do Shizuku e toque de novo.")
             try {
                 Shizuku.requestPermission(1)
             } catch (e: Throwable) {
-                status?.text = "Erro: " + e.toString()
+                aviso("Erro: " + e.toString())
             }
             return false
         }
@@ -218,16 +245,13 @@ class MainActivity : Activity() {
         val s = HashSet<String>(salvos)
         s.addAll(fixos)
         s.add(packageName)
-
         val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         if (ime != null) s.add(ime.substringBefore("/"))
-
         val home = Intent(Intent.ACTION_MAIN)
         home.addCategory(Intent.CATEGORY_HOME)
         val res = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
         val pacoteHome = res?.activityInfo?.packageName
         if (pacoteHome != null) s.add(pacoteHome)
-
         return s
     }
 
@@ -239,11 +263,12 @@ class MainActivity : Activity() {
         }
         try {
             l.removeAllViews()
-            val aviso = TextView(this)
-            aviso.text = "Marque os apps que NAO devem ser fechados:"
-            aviso.setTextColor(laranja)
-            aviso.setPadding(0, 0, 0, dp(8))
-            l.addView(aviso)
+            val dica = TextView(this)
+            dica.text = "Marque os apps que NÃO devem ser fechados:"
+            dica.setTextColor(suave)
+            dica.textSize = 12f
+            dica.setPadding(0, 0, 0, dp(6))
+            l.addView(dica)
 
             val salvos = HashSet<String>(prefs().getStringSet("protegidos", emptySet()) ?: emptySet())
             for (app in appsInstalados()) {
@@ -252,7 +277,7 @@ class MainActivity : Activity() {
                 val cb = CheckBox(this)
                 cb.text = packageManager.getApplicationLabel(app).toString()
                 cb.setTextColor(Color.WHITE)
-                cb.buttonTintList = ColorStateList.valueOf(laranja)
+                cb.buttonTintList = ColorStateList.valueOf(azul)
                 cb.isChecked = salvos.contains(pkg)
                 cb.setOnCheckedChangeListener { _, marcado ->
                     val atual = HashSet<String>(prefs().getStringSet("protegidos", emptySet()) ?: emptySet())
@@ -263,39 +288,13 @@ class MainActivity : Activity() {
             }
             l.visibility = View.VISIBLE
         } catch (e: Throwable) {
-            status?.text = "Erro: " + e.toString()
+            aviso("Erro: " + e.toString())
         }
-    }
-
-    private fun resolucao(pct: Int) {
-        if (!garantirShizuku()) return
-        status?.text = "Ajustando resolução..."
-        Thread {
-            val tam = rodar("wm size")
-            val den = rodar("wm density")
-            val mt = Regex("Physical size: (\\d+)x(\\d+)").find(tam)
-            val md = Regex("Physical density: (\\d+)").find(den)
-            if (mt == null || md == null) {
-                runOnUiThread { status?.text = "Nao consegui ler a resolucao do celular." }
-                return@Thread
-            }
-            val w = mt.groupValues[1].toInt()
-            val h = mt.groupValues[2].toInt()
-            val d = md.groupValues[1].toInt()
-            val nw = (w * pct / 100) / 2 * 2
-            val nh = (h * pct / 100) / 2 * 2
-            val nd = d * pct / 100
-            rodar("wm size " + nw + "x" + nh + "; wm density " + nd)
-            runOnUiThread {
-                status?.text = "Resolução em " + pct + "% (" + nw + "x" + nh +
-                    "). Para voltar ao normal, toque em Restaurar tudo."
-            }
-        }.start()
     }
 
     private fun modoJogo() {
         if (!garantirShizuku()) return
-        status?.text = "Ativando..."
+        aviso("Ativando...")
         val prot = protegidos()
         val alvos = appsInstalados().map { it.packageName }.filter { !prot.contains(it) }
         Thread {
@@ -314,8 +313,7 @@ class MainActivity : Activity() {
             }
             rodar("am kill-all")
             runOnUiThread {
-                status?.text = "Modo Jogo ativado. Nao Perturbe ligado e " + alvos.size +
-                    " apps fechados. No Free Fire: graficos Suave, sombras desligadas e FPS Normal."
+                aviso("Modo Jogo ativado: " + alvos.size + " apps fechados. No Free Fire use gráficos Suave.")
                 atualizar()
                 abrirJogo()
             }
@@ -331,39 +329,49 @@ class MainActivity : Activity() {
                 "settings put global zen_mode " + zen + "; " +
                 "settings put global window_animation_scale 1.0; " +
                 "settings put global transition_animation_scale 1.0; " +
-                "settings put global animator_duration_scale 1.0; " +
-                "wm size reset; wm density reset"
+                "settings put global animator_duration_scale 1.0"
             )
-            runOnUiThread {
-                status?.text = "Restaurado: Nao Perturbe, animacoes e resolucao voltaram ao normal."
-            }
+            runOnUiThread { aviso("Restaurado: Não Perturbe e animações voltaram ao normal.") }
+        }.start()
+    }
+
+    private fun ativarJanelas(ligar: Boolean) {
+        if (!garantirShizuku()) return
+        val v = if (ligar) "1" else "0"
+        Thread {
+            rodar(
+                "settings put global enable_freeform_support " + v + "; " +
+                "settings put global force_resizable_activities " + v
+            )
+            runOnUiThread { aviso("Pronto. Reinicie o celular e ligue o Shizuku de novo.") }
         }.start()
     }
 
     private fun ligarOverlay() {
         try {
             if (!Settings.canDrawOverlays(this)) {
-                status?.text = "Ative 'Exibir sobre outros apps' para o app e volte aqui."
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + packageName)
+                aviso("Ative 'Exibir sobre outros apps' para o Sent e volte aqui.")
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + packageName)
+                    )
                 )
-                startActivity(intent)
                 return
             }
             startForegroundService(Intent(this, OverlayService::class.java))
-            status?.text = "Overlay ligado. Veja o topo da tela."
+            aviso("Overlay ligado. Veja o topo da tela.")
         } catch (e: Throwable) {
-            status?.text = "Erro: " + e.toString()
+            aviso("Erro: " + e.toString())
         }
     }
 
     private fun desligarOverlay() {
         try {
             stopService(Intent(this, OverlayService::class.java))
-            status?.text = "Overlay desligado."
+            aviso("Overlay desligado.")
         } catch (e: Throwable) {
-            status?.text = "Erro: " + e.toString()
+            aviso("Erro: " + e.toString())
         }
     }
 
@@ -376,7 +384,7 @@ class MainActivity : Activity() {
                 return
             }
         }
-        status?.text = "Free Fire nao encontrado neste celular."
+        aviso("Free Fire não encontrado neste celular.")
     }
 
     private fun atualizar() {
