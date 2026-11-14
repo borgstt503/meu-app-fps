@@ -3,6 +3,7 @@ package com.meuapp.fps
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -24,7 +26,6 @@ import java.io.File
 
 class DesktopActivity : Activity() {
 
-    private val laranja = Color.parseColor("#FF8A00")
     private val pedirFundo = 7
     private var raiz: LinearLayout? = null
 
@@ -109,6 +110,59 @@ class DesktopActivity : Activity() {
         val i = Intent(this, JanelaService::class.java)
         i.putExtra("acao", "fechar")
         startForegroundService(i)
+    }
+
+    private fun protegidos(): Set<String> {
+        val prefs = getSharedPreferences("cfg", MODE_PRIVATE)
+        val s = HashSet<String>(prefs.getStringSet("protegidos", emptySet()) ?: emptySet())
+        s.add("com.dts.freefireth")
+        s.add("com.dts.freefiremax")
+        s.add("moe.shizuku.privileged.api")
+        s.add(packageName)
+        val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        if (ime != null) s.add(ime.substringBefore("/"))
+        return s
+    }
+
+    private fun limparApps() {
+        if (!shizukuOk()) {
+            Toast.makeText(this, "Ligue o Shizuku e autorize o app", Toast.LENGTH_LONG).show()
+            return
+        }
+        val prot = protegidos()
+        val alvos = packageManager.getInstalledApplications(0)
+            .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
+            .map { it.packageName }
+            .filter { !prot.contains(it) }
+        Toast.makeText(this, "Fechando " + alvos.size + " apps...", Toast.LENGTH_SHORT).show()
+        Thread {
+            for (p in alvos) {
+                rodar("am force-stop " + p)
+            }
+            rodar("am kill-all")
+            runOnUiThread {
+                Toast.makeText(this, alvos.size.toString() + " apps fechados", Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    private fun menuBandeja() {
+        val itens = arrayOf(
+            "Fechar apps (liberar RAM)",
+            "Fechar janelas",
+            "Trocar fundo",
+            "Fundo padrao",
+            "Ajustes (Modo Jogo, overlay)"
+        )
+        AlertDialog.Builder(this).setItems(itens) { _, qual ->
+            when (qual) {
+                0 -> limparApps()
+                1 -> fecharJanelas()
+                2 -> escolherFundo()
+                3 -> fundoPadrao()
+                4 -> startActivity(Intent(this, MainActivity::class.java))
+            }
+        }.show()
     }
 
     private fun mostrarApps() {
@@ -216,11 +270,11 @@ class DesktopActivity : Activity() {
         }
     }
 
-    private fun criarIcone(pacote: String, nome: String, acao: () -> Unit): LinearLayout {
+    private fun iconeDesktop(pacote: String, nome: String, acao: () -> Unit): LinearLayout {
         val item = LinearLayout(this)
         item.orientation = LinearLayout.VERTICAL
         item.gravity = Gravity.CENTER_HORIZONTAL
-        item.setPadding(dp(16), dp(16), dp(16), dp(8))
+        item.setPadding(dp(10), dp(10), dp(10), dp(6))
 
         val img = ImageView(this)
         try {
@@ -228,15 +282,15 @@ class DesktopActivity : Activity() {
         } catch (e: Throwable) {
             img.setBackgroundColor(Color.DKGRAY)
         }
-        img.layoutParams = LinearLayout.LayoutParams(dp(56), dp(56))
+        img.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
 
         val txt = TextView(this)
         txt.text = nome
         txt.setTextColor(Color.WHITE)
         txt.setShadowLayer(4f, 0f, 0f, Color.BLACK)
-        txt.textSize = 12f
+        txt.textSize = 11f
         txt.gravity = Gravity.CENTER
-        txt.setPadding(0, dp(6), 0, 0)
+        txt.setPadding(0, dp(4), 0, 0)
 
         item.addView(img)
         item.addView(txt)
@@ -244,14 +298,36 @@ class DesktopActivity : Activity() {
         return item
     }
 
-    private fun botaoBarra(texto: String, acao: () -> Unit): TextView {
-        val t = TextView(this)
-        t.text = texto
-        t.setTextColor(Color.WHITE)
-        t.textSize = 14f
-        t.setPadding(0, 0, dp(16), 0)
-        t.setOnClickListener { acao() }
-        return t
+    private fun iconeBarra(pacote: String, acao: () -> Unit): ImageView {
+        val img = ImageView(this)
+        try {
+            img.setImageDrawable(packageManager.getApplicationIcon(pacote))
+        } catch (e: Throwable) {
+            img.setBackgroundColor(Color.DKGRAY)
+        }
+        img.layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+        img.setPadding(dp(6), dp(6), dp(6), dp(6))
+        img.setOnClickListener { acao() }
+        return img
+    }
+
+    private fun logoIniciar(): GridLayout {
+        val logo = GridLayout(this)
+        logo.rowCount = 2
+        logo.columnCount = 2
+        logo.setPadding(dp(12), 0, dp(12), 0)
+        for (i in 0 until 4) {
+            val q = View(this)
+            q.setBackgroundColor(Color.parseColor("#4CC2FF"))
+            val lp = GridLayout.LayoutParams()
+            lp.width = dp(10)
+            lp.height = dp(10)
+            lp.setMargins(dp(1), dp(1), dp(1), dp(1))
+            q.layoutParams = lp
+            logo.addView(q)
+        }
+        logo.setOnClickListener { mostrarApps() }
+        return logo
     }
 
     @Deprecated("Deprecated in Java")
@@ -261,83 +337,153 @@ class DesktopActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.parseColor("#0B0B12")
-        window.navigationBarColor = Color.parseColor("#1E1E1E")
+        window.navigationBarColor = Color.parseColor("#202020")
 
         val r = LinearLayout(this)
         r.orientation = LinearLayout.VERTICAL
         raiz = r
 
         val area = GridLayout(this)
-        area.columnCount = 4
-        area.setPadding(dp(8), dp(24), dp(8), 0)
+        area.orientation = GridLayout.VERTICAL
+        area.rowCount = 3
+        area.setPadding(dp(4), dp(8), dp(4), 0)
         area.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
 
         area.addView(
-            criarIcone("com.google.android.youtube", "YouTube") {
-                abrirJanelaWeb("YouTube", "https://m.youtube.com")
+            iconeDesktop(packageName, "Este PC") {
+                startActivity(Intent(this, MainActivity::class.java))
             }
         )
         area.addView(
-            criarIcone("com.google.android.googlequicksearchbox", "Google") {
-                abrirJanelaWeb("Google", "https://www.google.com")
-            }
-        )
-        area.addView(
-            criarIcone("com.android.chrome", "Chrome") {
+            iconeDesktop("com.android.chrome", "Chrome") {
                 abrirJanelaWeb("Chrome", "https://www.google.com")
             }
         )
         area.addView(
-            criarIcone("com.zhiliaoapp.musically", "TikTok") {
+            iconeDesktop("com.google.android.youtube", "YouTube") {
+                abrirJanelaWeb("YouTube", "https://www.youtube.com")
+            }
+        )
+        area.addView(
+            iconeDesktop("com.zhiliaoapp.musically", "TikTok") {
                 abrirJanelaWeb("TikTok", "https://www.tiktok.com")
             }
         )
         area.addView(
-            criarIcone("com.dts.freefireth", "Free Fire") {
+            iconeDesktop("com.dts.freefireth", "Free Fire") {
                 abrirApp("com.dts.freefireth")
+            }
+        )
+        area.addView(
+            iconeDesktop("moe.shizuku.privileged.api", "Shizuku") {
+                abrirApp("moe.shizuku.privileged.api")
             }
         )
 
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
         barra.gravity = Gravity.CENTER_VERTICAL
-        barra.setPadding(dp(16), 0, dp(16), 0)
-        val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#E61E1E1E"))
-        barra.background = fundo
+        val fundoBarra = GradientDrawable()
+        fundoBarra.setColor(Color.parseColor("#E6202020"))
+        barra.background = fundoBarra
         barra.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(56)
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
         )
 
-        val iniciar = TextView(this)
-        iniciar.text = "Apps"
-        iniciar.setTextColor(laranja)
-        iniciar.textSize = 18f
-        iniciar.layoutParams = LinearLayout.LayoutParams(
-            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        val esquerda = View(this)
+        esquerda.layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+
+        val centro = LinearLayout(this)
+        centro.orientation = LinearLayout.HORIZONTAL
+        centro.gravity = Gravity.CENTER_VERTICAL
+
+        val pesquisa = TextView(this)
+        pesquisa.text = "Pesquisar"
+        pesquisa.setTextColor(Color.parseColor("#D0D0D0"))
+        pesquisa.textSize = 13f
+        pesquisa.gravity = Gravity.CENTER_VERTICAL
+        pesquisa.setPadding(dp(16), 0, dp(16), 0)
+        val fundoPesquisa = GradientDrawable()
+        fundoPesquisa.setColor(Color.parseColor("#3A3A3A"))
+        fundoPesquisa.cornerRadius = dp(18).toFloat()
+        pesquisa.background = fundoPesquisa
+        val lpPesquisa = LinearLayout.LayoutParams(dp(170), dp(34))
+        lpPesquisa.leftMargin = dp(4)
+        lpPesquisa.rightMargin = dp(8)
+        pesquisa.layoutParams = lpPesquisa
+        pesquisa.setOnClickListener { abrirJanelaWeb("Google", "https://www.google.com") }
+
+        centro.addView(logoIniciar())
+        centro.addView(pesquisa)
+        centro.addView(
+            iconeBarra("com.google.android.youtube") {
+                abrirJanelaWeb("YouTube", "https://www.youtube.com")
+            }
         )
-        iniciar.setOnClickListener { mostrarApps() }
+        centro.addView(
+            iconeBarra("com.android.chrome") {
+                abrirJanelaWeb("Chrome", "https://www.google.com")
+            }
+        )
+        centro.addView(
+            iconeBarra("com.zhiliaoapp.musically") {
+                abrirJanelaWeb("TikTok", "https://www.tiktok.com")
+            }
+        )
+        centro.addView(
+            iconeBarra("com.dts.freefireth") {
+                abrirApp("com.dts.freefireth")
+            }
+        )
+        centro.addView(
+            iconeBarra("moe.shizuku.privileged.api") {
+                abrirApp("moe.shizuku.privileged.api")
+            }
+        )
 
-        val relogio = TextClock(this)
-        relogio.format24Hour = "HH:mm"
-        relogio.format12Hour = "HH:mm"
-        relogio.setTextColor(Color.WHITE)
-        relogio.textSize = 16f
+        val direita = LinearLayout(this)
+        direita.orientation = LinearLayout.HORIZONTAL
+        direita.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        direita.setPadding(0, 0, dp(12), 0)
+        direita.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
 
-        barra.addView(iniciar)
-        barra.addView(botaoBarra("Ajustes") {
-            startActivity(Intent(this, MainActivity::class.java))
-        })
-        val fundoBtn = botaoBarra("Fundo") { escolherFundo() }
-        fundoBtn.setOnLongClickListener {
-            fundoPadrao()
-            true
-        }
-        barra.addView(fundoBtn)
-        barra.addView(botaoBarra("Fechar janelas") { fecharJanelas() })
-        barra.addView(relogio)
+        val bandeja = TextView(this)
+        bandeja.text = "^"
+        bandeja.setTextColor(Color.WHITE)
+        bandeja.textSize = 20f
+        bandeja.gravity = Gravity.CENTER
+        bandeja.setPadding(dp(14), 0, dp(14), 0)
+        bandeja.setOnClickListener { menuBandeja() }
+
+        val relogio = LinearLayout(this)
+        relogio.orientation = LinearLayout.VERTICAL
+        relogio.gravity = Gravity.END
+
+        val hora = TextClock(this)
+        hora.format24Hour = "HH:mm"
+        hora.format12Hour = "HH:mm"
+        hora.setTextColor(Color.WHITE)
+        hora.textSize = 12f
+        hora.gravity = Gravity.END
+
+        val data = TextClock(this)
+        data.format24Hour = "dd-MM-yyyy"
+        data.format12Hour = "dd-MM-yyyy"
+        data.setTextColor(Color.WHITE)
+        data.textSize = 11f
+        data.gravity = Gravity.END
+
+        relogio.addView(hora)
+        relogio.addView(data)
+
+        direita.addView(bandeja)
+        direita.addView(relogio)
+
+        barra.addView(esquerda)
+        barra.addView(centro)
+        barra.addView(direita)
 
         r.addView(area)
         r.addView(barra)
