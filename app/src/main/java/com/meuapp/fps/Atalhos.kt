@@ -12,6 +12,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -63,10 +64,18 @@ object Atalhos {
         Pair("cursive", "Cursiva")
     )
 
-    val cursores = listOf("Seta Windows (branca)", "Seta preta", "Cruz", "Ponto")
+    val cursores = listOf(
+        "Seta Windows (branca)",
+        "Seta preta",
+        "Cruz",
+        "Ponto",
+        "Imagem da galeria"
+    )
 
     val escalas = floatArrayOf(0.7f, 0.8f, 0.9f, 1.0f, 1.15f, 1.3f)
     val nomesEscala = listOf("70%", "80%", "90%", "100%", "115%", "130%")
+
+    var cursorImg: Bitmap? = null
 
     private fun prefs(c: Context) = c.getSharedPreferences("cfg", Context.MODE_PRIVATE)
 
@@ -99,7 +108,9 @@ object Atalhos {
     }
 
     fun indiceCursor(c: Context): Int {
-        return getI(c, "cursor", 0).coerceIn(0, cursores.size - 1)
+        val i = getI(c, "cursor", 0).coerceIn(0, cursores.size - 1)
+        if (i == 4 && cursorImg == null) carregarCursorImg(c)
+        return i
     }
 
     fun indiceEscala(c: Context): Int {
@@ -111,7 +122,7 @@ object Atalhos {
     }
 
     fun modoApp(c: Context): Boolean {
-        return getB(c, "modo_app", false)
+        return getB(c, "modo_app", true)
     }
 
     fun comEscala(base: Context): Context {
@@ -136,18 +147,79 @@ object Atalhos {
     fun escolher(a: Activity, titulo: String, opcoes: List<String>, aoEscolher: (Int) -> Unit) {
         AlertDialog.Builder(a)
             .setTitle(titulo)
-            .setItems(opcoes.toTypedArray()) { _, i -> aoEscolher(i) }
+            .setItems(opcoes.toTypedArray()) { _, i ->
+                if (titulo == "Cursor" && i == 4) {
+                    a.startActivity(Intent(a, CursorActivity::class.java))
+                } else {
+                    aoEscolher(i)
+                }
+            }
             .show()
     }
 
     fun hotspot(estilo: Int, t: Float): Pair<Float, Float> {
-        return if (estilo <= 1) Pair(t * 0.10f, t * 0.05f) else Pair(t / 2f, t / 2f)
+        return if (estilo == 4) {
+            Pair(0f, 0f)
+        } else if (estilo <= 1) {
+            Pair(t * 0.10f, t * 0.05f)
+        } else {
+            Pair(t / 2f, t / 2f)
+        }
+    }
+
+    fun carregarCursorImg(c: Context) {
+        val f = File(c.filesDir, "cursor.img")
+        if (!f.exists()) {
+            cursorImg = null
+            return
+        }
+        try {
+            val o = BitmapFactory.Options()
+            o.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(f.path, o)
+            var s = 1
+            while (o.outWidth / s > 256 || o.outHeight / s > 256) s *= 2
+            val o2 = BitmapFactory.Options()
+            o2.inSampleSize = s
+            cursorImg = BitmapFactory.decodeFile(f.path, o2)
+        } catch (e: Throwable) {
+            cursorImg = null
+        }
+    }
+
+    fun salvarCursor(c: Context, uri: Uri): Boolean {
+        return try {
+            val f = File(c.filesDir, "cursor.img")
+            c.contentResolver.openInputStream(uri)?.use { entrada ->
+                f.outputStream().use { saida ->
+                    entrada.copyTo(saida)
+                }
+            }
+            cursorImg = null
+            val o = BitmapFactory.Options()
+            o.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(f.path, o)
+            o.outWidth > 0 && o.outHeight > 0
+        } catch (e: Throwable) {
+            false
+        }
     }
 
     fun desenharCursor(cv: Canvas, estilo: Int, t: Float) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         p.strokeJoin = Paint.Join.ROUND
         p.strokeCap = Paint.Cap.ROUND
+        if (estilo == 4) {
+            val bmp = cursorImg
+            if (bmp != null) {
+                val s = t / maxOf(bmp.width, bmp.height).toFloat()
+                p.isFilterBitmap = true
+                cv.drawBitmap(bmp, null, RectF(0f, 0f, bmp.width * s, bmp.height * s), p)
+            } else {
+                desenharCursor(cv, 0, t)
+            }
+            return
+        }
         if (estilo <= 1) {
             val path = Path()
             path.moveTo(t * 0.10f, t * 0.05f)
