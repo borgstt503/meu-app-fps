@@ -88,6 +88,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".CursorActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
+        <activity
             android:name=".DesktopActivity"
             android:label="Sent"
             android:launchMode="singleTask"
