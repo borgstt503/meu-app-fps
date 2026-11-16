@@ -1,6 +1,7 @@
 package com.meuapp.fps
 
 import android.accessibilityservice.AccessibilityService
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -35,13 +36,45 @@ class TeclaService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val k = event.keyCode
-        if (k == KeyEvent.KEYCODE_F11 || k == KeyEvent.KEYCODE_F5) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                if (barra != null) esconder() else mostrar()
+        val tratar = k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F9 ||
+            k == KeyEvent.KEYCODE_F10 || k == KeyEvent.KEYCODE_F11
+        if (!tratar) return false
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            when (k) {
+                KeyEvent.KEYCODE_F9 -> alternarPainel()
+                KeyEvent.KEYCODE_F10 -> alternarOverlayFps()
+                else -> if (barra != null) esconder() else mostrar()
             }
-            return true
         }
-        return false
+        return true
+    }
+
+    private fun overlayRodando(): Boolean {
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            @Suppress("DEPRECATION")
+            am.getRunningServices(100).any {
+                it.service.className == OverlayService::class.java.name
+            }
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    private fun alternarOverlayFps() {
+        if (overlayRodando()) {
+            stopService(Intent(this, OverlayService::class.java))
+            return
+        }
+        if (!Settings.canDrawOverlays(this)) {
+            Atalhos.aviso(this, "Ative 'Exibir sobre outros apps' para o Sent")
+            return
+        }
+        try {
+            startForegroundService(Intent(this, OverlayService::class.java))
+        } catch (e: Throwable) {
+            Atalhos.aviso(this, "Não foi possível ligar o overlay")
+        }
     }
 
     private fun esconderPainel() {
