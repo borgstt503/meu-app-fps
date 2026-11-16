@@ -56,8 +56,14 @@ private class Moldura(
 
 class JanelaService : Service() {
 
+    companion object {
+        @Volatile
+        var total = 0
+    }
+
     private var wm: WindowManager? = null
     private val janelas = ArrayList<View>()
+    private val webs = ArrayList<WebView>()
 
     private val uaPc = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -69,33 +75,28 @@ class JanelaService : Service() {
         "amazon-adsystem.com", "popads.net", "propellerads.com",
         "exoclick.com", "adsterra.com", "mgid.com", "moatads.com",
         "adcolony.com", "smaato.net", "inmobi.com", "applovin.com",
-        "ads.tiktok.com", "analytics.tiktok.com", "ads.youtube.com",
-        "imasdk.googleapis.com", "adform.net", "casalemedia.com",
-        "yieldmo.com", "sharethrough.com", "teads.tv", "revcontent.com",
-        "zedo.com", "bidswitch.net", "smartadserver.com", "adsrvr.org",
-        "media.net", "yandex.ru/ads", "an.facebook.com", "unityads.unity3d.com"
-    )
-
-    private val padroes = listOf(
-        "pagead", "/adservice", "adsbygoogle", "/ads/", "/adserver",
-        "googleadservices", "adsense", "popunder", "/api/stats/ads",
-        "/get_midroll_", "ad_break", "/ads?"
+        "ads.tiktok.com", "analytics.tiktok.com", "adform.net",
+        "casalemedia.com", "yieldmo.com", "sharethrough.com", "teads.tv",
+        "revcontent.com", "zedo.com", "bidswitch.net", "smartadserver.com",
+        "adsrvr.org", "media.net", "an.facebook.com", "unityads.unity3d.com"
     )
 
     private val scriptAnuncios = """
 (function(){
   if (window.__sentAd) return;
   window.__sentAd = 1;
-  var css = "ins.adsbygoogle,.adsbygoogle,[id^='google_ads'],[id^='div-gpt-ad'],#tads,#tadsb,#bottomads,[data-text-ad],[aria-label='Anúncio'],[aria-label='Anúncios'],ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-banner-promo-renderer,#player-ads,.ytp-ad-module,.ytp-ad-overlay-container,.video-ads,ytm-promoted-sparkles-web-renderer,ytm-companion-ad-renderer{display:none !important}";
-  var s = document.createElement('style');
-  s.innerHTML = css;
-  (document.head || document.documentElement).appendChild(s);
+  try {
+    var css = "ins.adsbygoogle,.adsbygoogle,[id^='google_ads'],[id^='div-gpt-ad'],#tads,#tadsb,#bottomads,[data-text-ad],ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-banner-promo-renderer,#player-ads,.ytp-ad-module,.ytp-ad-overlay-container,.video-ads{display:none !important}";
+    var s = document.createElement('style');
+    s.innerHTML = css;
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
   setInterval(function(){
-    var v = document.querySelector('.ad-showing video');
-    if (v && isFinite(v.duration)) { v.muted = true; v.currentTime = v.duration; }
-    var b = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
-    if (b) { b.click(); }
-  }, 500);
+    try {
+      var b = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
+      if (b) { b.click(); }
+    } catch (e) {}
+  }, 700);
 })();
 """
 
@@ -112,11 +113,19 @@ class JanelaService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         iniciarNotificacao()
         if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        if (intent?.getStringExtra("acao") == "fechar") {
+
+        val acao = intent?.getStringExtra("acao")
+        if (acao == "fechar") {
             fecharTudo()
             stopSelf()
             return START_NOT_STICKY
         }
+        if (acao == "recarregar") {
+            webs.lastOrNull()?.reload()
+            if (janelas.isEmpty()) stopSelf()
+            return START_NOT_STICKY
+        }
+
         val url = intent?.getStringExtra("url")
         val titulo = intent?.getStringExtra("titulo") ?: "Janela"
 
@@ -161,7 +170,7 @@ class JanelaService : Service() {
     private fun botao(texto: String): TextView {
         val b = TextView(this)
         b.text = texto
-        b.setTextColor(Color.parseColor("#D0D0D0"))
+        b.setTextColor(Color.parseColor("#CDB4FF"))
         b.textSize = 16f
         b.gravity = Gravity.CENTER
         b.setPadding(dp(9), 0, dp(9), 0)
@@ -184,9 +193,9 @@ class JanelaService : Service() {
         val tf = Atalhos.typeface(this)
 
         val moldura = GradientDrawable()
-        moldura.setColor(Color.parseColor("#202020"))
+        moldura.setColor(Color.parseColor("#1C1230"))
         moldura.cornerRadius = dp(14).toFloat()
-        moldura.setStroke(dp(1), Color.parseColor("#3A3A3A"))
+        moldura.setStroke(dp(1), Color.parseColor("#4A2F7A"))
 
         val raiz = LinearLayout(this)
         raiz.orientation = LinearLayout.VERTICAL
@@ -196,12 +205,12 @@ class JanelaService : Service() {
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
         barra.gravity = Gravity.CENTER_VERTICAL
-        barra.setBackgroundColor(Color.parseColor("#2B2B2B"))
+        barra.setBackgroundColor(Color.parseColor("#2A1747"))
         barra.setPadding(dp(12), 0, dp(4), 0)
 
         val t = TextView(this)
         t.text = titulo
-        t.setTextColor(Color.parseColor("#E8E8E8"))
+        t.setTextColor(Color.parseColor("#E4D4FF"))
         t.textSize = 13f
         t.maxLines = 1
         t.gravity = Gravity.CENTER_VERTICAL
@@ -243,9 +252,8 @@ class JanelaService : Service() {
                 if (request != null && !request.isForMainFrame &&
                     Atalhos.bloqueio(this@JanelaService)
                 ) {
-                    val u = request.url.toString().lowercase()
                     val h = request.url.host ?: ""
-                    if (dominios.any { h.contains(it) } || padroes.any { u.contains(it) }) {
+                    if (dominios.any { h.contains(it) }) {
                         return WebResourceResponse(
                             "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
                         )
@@ -345,7 +353,7 @@ class JanelaService : Service() {
             }
             wm?.updateViewLayout(raiz, params)
             teclado.setTextColor(
-                if (focavel) Color.parseColor("#4CC2FF") else Color.parseColor("#D0D0D0")
+                if (focavel) Color.parseColor("#B388FF") else Color.parseColor("#CDB4FF")
             )
         }
 
@@ -403,12 +411,16 @@ class JanelaService : Service() {
             } catch (e: Throwable) {
             }
             janelas.remove(raiz)
+            webs.remove(web)
+            total = janelas.size
             web.destroy()
             if (janelas.isEmpty()) stopSelf()
         }
 
         wm?.addView(raiz, params)
         janelas.add(raiz)
+        webs.add(web)
+        total = janelas.size
     }
 
     private fun fecharTudo() {
@@ -419,6 +431,8 @@ class JanelaService : Service() {
             }
         }
         janelas.clear()
+        webs.clear()
+        total = 0
     }
 
     override fun onDestroy() {
