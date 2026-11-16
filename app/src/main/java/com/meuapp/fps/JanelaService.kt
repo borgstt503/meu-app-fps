@@ -12,11 +12,14 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -54,6 +57,13 @@ private class Moldura(
     }
 }
 
+private class Ponte(private val acao: () -> Unit) {
+    @JavascriptInterface
+    fun foco() {
+        Handler(Looper.getMainLooper()).post { acao() }
+    }
+}
+
 class JanelaService : Service() {
 
     companion object {
@@ -64,6 +74,7 @@ class JanelaService : Service() {
     private var wm: WindowManager? = null
     private val janelas = ArrayList<View>()
     private val webs = ArrayList<WebView>()
+    private val tecladoBtns = ArrayList<View>()
 
     private val uaPc = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -100,6 +111,21 @@ class JanelaService : Service() {
 })();
 """
 
+    private val scriptFoco = """
+(function(){
+  if (window.__sentFoco) return;
+  window.__sentFoco = 1;
+  document.addEventListener('focusin', function(e){
+    var t = e.target;
+    if (!t) return;
+    var n = (t.tagName || '').toUpperCase();
+    if (n === 'INPUT' || n === 'TEXTAREA' || t.isContentEditable) {
+      try { Sent.foco(); } catch (x) {}
+    }
+  }, true);
+})();
+"""
+
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
     }
@@ -122,6 +148,11 @@ class JanelaService : Service() {
         }
         if (acao == "recarregar") {
             webs.lastOrNull()?.reload()
+            if (janelas.isEmpty()) stopSelf()
+            return START_NOT_STICKY
+        }
+        if (acao == "teclado") {
+            tecladoBtns.lastOrNull()?.performClick()
             if (janelas.isEmpty()) stopSelf()
             return START_NOT_STICKY
         }
@@ -264,13 +295,13 @@ class JanelaService : Service() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                view?.evaluateJavascript(scriptFoco, null)
                 if (Atalhos.bloqueio(this@JanelaService)) {
                     view?.evaluateJavascript(scriptAnuncios, null)
                 }
             }
         }
         web.webChromeClient = WebChromeClient()
-        web.loadUrl(url)
 
         val tamCursor = dp(22)
         val cursor = CursorView(this, Atalhos.indiceCursor(this))
@@ -339,23 +370,35 @@ class JanelaService : Service() {
             }
         }
 
-        voltar.setOnClickListener {
-            if (web.canGoBack()) web.goBack()
-        }
-
         var focavel = false
-        teclado.setOnClickListener {
-            focavel = !focavel
-            if (focavel) {
+        fun definirFoco(ligar: Boolean) {
+            if (ligar == focavel) {
+                if (ligar) web.requestFocus()
+                return
+            }
+            focavel = ligar
+            if (ligar) {
                 params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
             } else {
                 params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             }
-            wm?.updateViewLayout(raiz, params)
+            try {
+                wm?.updateViewLayout(raiz, params)
+            } catch (e: Throwable) {
+            }
             teclado.setTextColor(
-                if (focavel) Color.parseColor("#B388FF") else Color.parseColor("#CDB4FF")
+                if (ligar) Color.parseColor("#B388FF") else Color.parseColor("#CDB4FF")
             )
+            if (ligar) web.requestFocus()
         }
+
+        web.addJavascriptInterface(Ponte { definirFoco(true) }, "Sent")
+
+        voltar.setOnClickListener {
+            if (web.canGoBack()) web.goBack()
+        }
+
+        teclado.setOnClickListener { definirFoco(!focavel) }
 
         mais.setOnClickListener {
             curW = minOf((curW * 1.15f).toInt(), maxW)
@@ -412,6 +455,7 @@ class JanelaService : Service() {
             }
             janelas.remove(raiz)
             webs.remove(web)
+            tecladoBtns.remove(teclado)
             total = janelas.size
             web.destroy()
             if (janelas.isEmpty()) stopSelf()
@@ -420,7 +464,10 @@ class JanelaService : Service() {
         wm?.addView(raiz, params)
         janelas.add(raiz)
         webs.add(web)
+        tecladoBtns.add(teclado)
         total = janelas.size
+
+        web.loadUrl(url)
     }
 
     private fun fecharTudo() {
@@ -432,6 +479,7 @@ class JanelaService : Service() {
         }
         janelas.clear()
         webs.clear()
+        tecladoBtns.clear()
         total = 0
     }
 
