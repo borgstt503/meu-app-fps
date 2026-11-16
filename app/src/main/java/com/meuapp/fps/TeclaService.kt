@@ -39,14 +39,25 @@ class TeclaService : AccessibilityService() {
         val tratar = k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F9 ||
             k == KeyEvent.KEYCODE_F10 || k == KeyEvent.KEYCODE_F11
         if (!tratar) return false
+        if (k == KeyEvent.KEYCODE_F5 && JanelaService.total == 0) return false
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (k) {
+                KeyEvent.KEYCODE_F5 -> recarregarJanela()
                 KeyEvent.KEYCODE_F9 -> alternarPainel()
                 KeyEvent.KEYCODE_F10 -> alternarOverlayFps()
                 else -> if (barra != null) esconder() else mostrar()
             }
         }
         return true
+    }
+
+    private fun recarregarJanela() {
+        val i = Intent(this, JanelaService::class.java)
+        i.putExtra("acao", "recarregar")
+        try {
+            startForegroundService(i)
+        } catch (e: Throwable) {
+        }
     }
 
     private fun overlayRodando(): Boolean {
@@ -205,8 +216,8 @@ class TeclaService : AccessibilityService() {
         val s = SeekBar(this)
         s.max = 255
         s.progress = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
-        s.progressTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
-        s.thumbTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
+        s.progressTintList = ColorStateList.valueOf(Color.parseColor("#B388FF"))
+        s.thumbTintList = ColorStateList.valueOf(Color.parseColor("#B388FF"))
         s.layoutParams = LinearLayout.LayoutParams(dp(110), dp(38))
         s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
@@ -234,9 +245,9 @@ class TeclaService : AccessibilityService() {
         if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#E6202020"))
+        fundo.setColor(Color.parseColor("#E61C1230"))
         fundo.cornerRadius = dp(24).toFloat()
-        fundo.setStroke(dp(1), Color.parseColor("#3A3A3A"))
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
 
         val linha = LinearLayout(this)
         linha.orientation = LinearLayout.HORIZONTAL
@@ -268,7 +279,7 @@ class TeclaService : AccessibilityService() {
 
         val sol = TextView(this)
         sol.text = "☀"
-        sol.setTextColor(Color.parseColor("#D0D0D0"))
+        sol.setTextColor(Color.parseColor("#CDB4FF"))
         sol.textSize = 16f
         sol.setPadding(dp(8), 0, 0, 0)
         linha.addView(sol)
