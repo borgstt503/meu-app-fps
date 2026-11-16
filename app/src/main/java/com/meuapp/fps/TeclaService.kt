@@ -25,6 +25,7 @@ class TeclaService : AccessibilityService() {
     private var wm: WindowManager? = null
     private var barra: View? = null
     private var painel: View? = null
+    private var ultimoF5 = 0L
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
@@ -34,15 +35,58 @@ class TeclaService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    private fun appNaFrente(): String? {
+        return try {
+            val r = rootInActiveWindow
+            val p = r?.packageName?.toString()
+            r?.recycle()
+            p
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    private fun pacoteHome(): String? {
+        val i = Intent(Intent.ACTION_MAIN)
+        i.addCategory(Intent.CATEGORY_HOME)
+        return packageManager.resolveActivity(i, 0)?.activityInfo?.packageName
+    }
+
+    private fun ignorar(p: String): Boolean {
+        if (p == packageName) return true
+        if (p == "com.android.systemui" || p == "android") return true
+        if (p == "moe.shizuku.privileged.api") return true
+        if (p == pacoteHome()) return true
+        val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        if (ime != null && ime.startsWith(p)) return true
+        return false
+    }
+
+    private fun ehNavegador(p: String): Boolean {
+        val x = p.lowercase()
+        return x.contains("chrome") || x.contains("opera") || x.contains("browser") ||
+            x.contains("firefox") || x.contains("brave") || x.contains("edge")
+    }
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val k = event.keyCode
-        val tratar = k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F9 ||
+        val tratar = k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F7 ||
+            k == KeyEvent.KEYCODE_F8 || k == KeyEvent.KEYCODE_F9 ||
             k == KeyEvent.KEYCODE_F10 || k == KeyEvent.KEYCODE_F11
         if (!tratar) return false
-        if (k == KeyEvent.KEYCODE_F5 && JanelaService.total == 0) return false
+
+        if (k == KeyEvent.KEYCODE_F5 && JanelaService.total == 0) {
+            val p = appNaFrente()
+            if (p == null || ignorar(p) || ehNavegador(p)) return false
+        }
+
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (k) {
-                KeyEvent.KEYCODE_F5 -> recarregarJanela()
+                KeyEvent.KEYCODE_F5 -> {
+                    if (JanelaService.total > 0) recarregarJanela() else reiniciarApp()
+                }
+                KeyEvent.KEYCODE_F7 -> alternarTeclado()
+                KeyEvent.KEYCODE_F8 -> irParaInicio()
                 KeyEvent.KEYCODE_F9 -> alternarPainel()
                 KeyEvent.KEYCODE_F10 -> alternarOverlayFps()
                 else -> if (barra != null) esconder() else mostrar()
@@ -51,13 +95,53 @@ class TeclaService : AccessibilityService() {
         return true
     }
 
-    private fun recarregarJanela() {
+    private fun enviarJanela(acao: String) {
         val i = Intent(this, JanelaService::class.java)
-        i.putExtra("acao", "recarregar")
+        i.putExtra("acao", acao)
         try {
             startForegroundService(i)
         } catch (e: Throwable) {
         }
+    }
+
+    private fun recarregarJanela() {
+        enviarJanela("recarregar")
+    }
+
+    private fun alternarTeclado() {
+        if (JanelaService.total > 0) {
+            enviarJanela("teclado")
+        } else {
+            Atalhos.aviso(this, "Nenhuma janela flutuante aberta")
+        }
+    }
+
+    private fun irParaInicio() {
+        esconder()
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        abrirTela(DesktopActivity::class.java)
+    }
+
+    private fun reiniciarApp() {
+        val p = appNaFrente() ?: return
+        val agora = System.currentTimeMillis()
+        if (agora - ultimoF5 > 3000) {
+            ultimoF5 = agora
+            Atalhos.aviso(this, "Aperte F5 de novo para reiniciar " + Atalhos.nomeDe(this, p))
+            return
+        }
+        ultimoF5 = 0
+        if (!Atalhos.shizukuOk()) {
+            Atalhos.aviso(this, "Ligue o Shizuku e autorize o app")
+            return
+        }
+        val comp = packageManager.getLaunchIntentForPackage(p)
+            ?.component?.flattenToShortString()
+        Thread {
+            Atalhos.rodar("am force-stop " + p)
+            Thread.sleep(700)
+            if (comp != null) Atalhos.rodar("am start -n " + comp)
+        }.start()
     }
 
     private fun overlayRodando(): Boolean {
@@ -146,12 +230,7 @@ class TeclaService : AccessibilityService() {
     }
 
     private fun fecharJanelas() {
-        val i = Intent(this, JanelaService::class.java)
-        i.putExtra("acao", "fechar")
-        try {
-            startForegroundService(i)
-        } catch (e: Throwable) {
-        }
+        enviarJanela("fechar")
     }
 
     private fun abrirTela(cls: Class<*>) {
