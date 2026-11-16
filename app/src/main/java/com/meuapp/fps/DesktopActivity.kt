@@ -12,6 +12,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -30,12 +31,15 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
 
 private class Ferr(val nome: String, val icone: Drawable, val acao: () -> Unit)
+
+private class ItemMenu(val texto: String, val acao: () -> Unit)
 
 class DesktopActivity : Activity() {
 
@@ -47,9 +51,19 @@ class DesktopActivity : Activity() {
     private var grade: GridLayout? = null
     private var campoBusca: EditText? = null
     private var bateriaTxt: TextView? = null
+    private var areaView: GridLayout? = null
+    private var centroView: LinearLayout? = null
+    private var logoView: View? = null
+    private var pesquisaView: View? = null
     private var todosApps: List<ResolveInfo> = emptyList()
     private var ferrs: List<Ferr> = emptyList()
     private val tf by lazy { Atalhos.typeface(this) }
+
+    private val roxo = Color.parseColor("#B388FF")
+    private val roxoTexto = Color.parseColor("#E4D4FF")
+    private val roxoSuave = Color.parseColor("#B7A5D6")
+    private val vermelho = Color.parseColor("#E62117")
+    private val cinza = Color.parseColor("#555555")
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Atalhos.comEscala(newBase))
@@ -81,18 +95,26 @@ class DesktopActivity : Activity() {
         return BitmapDrawable(resources, bmp)
     }
 
-    private fun iconeDe(pacote: String, cor: Int): Drawable {
+    private fun ehOpera(p: String): Boolean {
+        return p.startsWith("com.opera.")
+    }
+
+    private fun iconeDoPacote(p: String): Drawable {
         return try {
-            packageManager.getApplicationIcon(pacote)
+            packageManager.getApplicationIcon(p)
         } catch (e: Throwable) {
-            iconeLetra(pacote.substringAfterLast('.').take(1).uppercase(), cor)
+            val nome = Atalhos.sites[p]?.first ?: (if (ehOpera(p)) "Opera" else p.substringAfterLast('.'))
+            val cor = if (p == "com.google.android.youtube" || ehOpera(p)) vermelho else cinza
+            iconeLetra(nome.take(1).uppercase(), cor)
         }
     }
 
-    private fun iconeOpera(): Drawable {
-        val p = Atalhos.pacoteOpera(this)
-        return if (p != null) iconeDe(p, Color.parseColor("#E62117"))
-        else iconeLetra("O", Color.parseColor("#E62117"))
+    private fun rotuloDe(p: String): String {
+        if (p == packageName) return "Este PC"
+        val s = Atalhos.sites[p]
+        if (s != null) return s.first
+        if (ehOpera(p)) return "Opera"
+        return if (Atalhos.instalado(this, p)) Atalhos.nomeDe(this, p) else p.substringAfterLast('.')
     }
 
     private fun abrirApp(pacote: String) {
@@ -125,6 +147,46 @@ class DesktopActivity : Activity() {
         startForegroundService(i)
     }
 
+    private fun abrirPacote(p: String) {
+        if (p == packageName) {
+            abrirTela(MainActivity::class.java)
+            return
+        }
+        val site = Atalhos.sites[p]
+        if (site != null) {
+            abrirJanelaWeb(site.first, site.second)
+            return
+        }
+        if (ehOpera(p)) {
+            abrirJanelaWeb("Opera", "https://www.google.com")
+            return
+        }
+        abrirApp(p)
+    }
+
+    private fun abrirEmJanela(p: String) {
+        val site = Atalhos.sites[p]
+        if (site != null) {
+            abrirJanelaWeb(site.first, site.second)
+            return
+        }
+        if (ehOpera(p)) {
+            abrirJanelaWeb("Opera", "https://www.google.com")
+            return
+        }
+        Atalhos.abrirJanela(this, p)
+    }
+
+    private fun configApp(p: String) {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + p))
+            )
+        } catch (e: Throwable) {
+            Toast.makeText(this, "Não foi possível abrir", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun fecharJanelas() {
         val i = Intent(this, JanelaService::class.java)
         i.putExtra("acao", "fechar")
@@ -139,7 +201,7 @@ class DesktopActivity : Activity() {
         Thread {
             Atalhos.rodar("settings put system pointer_speed " + v)
             runOnUiThread {
-                Toast.makeText(this, "Velocidade do cursor ajustada", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Velocidade do mouse ajustada", Toast.LENGTH_SHORT).show()
             }
         }.start()
     }
@@ -203,6 +265,155 @@ class DesktopActivity : Activity() {
 
     private fun aplicarFundo() {
         raiz?.background = Atalhos.fundoDrawable(this)
+    }
+
+    private fun padraoDesktop(): List<String> {
+        val l = ArrayList<String>()
+        l.add(packageName)
+        l.add("com.android.chrome")
+        l.add(Atalhos.pacoteOpera(this) ?: "com.opera.browser")
+        l.add("com.google.android.youtube")
+        l.add("com.zhiliaoapp.musically")
+        l.add("com.dts.freefireth")
+        l.add("moe.shizuku.privileged.api")
+        return l
+    }
+
+    private fun padraoBarra(): List<String> {
+        return padraoDesktop().drop(1)
+    }
+
+    private fun lerLista(chave: String, padrao: List<String>): MutableList<String> {
+        val s = getSharedPreferences("cfg", MODE_PRIVATE).getString(chave, null)
+        if (s == null) return ArrayList(padrao)
+        if (s.isEmpty()) return ArrayList()
+        return ArrayList(s.split(","))
+    }
+
+    private fun salvarLista(chave: String, l: List<String>) {
+        getSharedPreferences("cfg", MODE_PRIVATE).edit()
+            .putString(chave, l.joinToString(","))
+            .apply()
+    }
+
+    private fun alternarFixo(
+        chave: String,
+        padrao: List<String>,
+        p: String,
+        msgOn: String,
+        msgOff: String
+    ) {
+        val l = lerLista(chave, padrao)
+        if (l.contains(p)) {
+            l.remove(p)
+            Toast.makeText(this, msgOff, Toast.LENGTH_SHORT).show()
+        } else {
+            l.add(p)
+            Toast.makeText(this, msgOn, Toast.LENGTH_SHORT).show()
+        }
+        salvarLista(chave, l)
+        montarFixos()
+    }
+
+    private fun montarFixos() {
+        preencherArea()
+        preencherBarra()
+    }
+
+    private fun mostrarMenu(ancora: View, itens: List<ItemMenu>) {
+        val largura = dp(240)
+        val caixa = LinearLayout(this)
+        caixa.orientation = LinearLayout.VERTICAL
+        val fundo = arred(Color.parseColor("#F21C1230"), 10)
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        caixa.background = fundo
+        caixa.setPadding(0, dp(6), 0, dp(6))
+
+        val popup = PopupWindow(caixa, largura, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        popup.elevation = dp(8).toFloat()
+
+        for (item in itens) {
+            val t = TextView(this)
+            t.text = item.texto
+            t.setTextColor(roxoTexto)
+            t.textSize = 13f
+            t.setPadding(dp(16), dp(10), dp(16), dp(10))
+            t.setOnClickListener {
+                popup.dismiss()
+                item.acao()
+            }
+            caixa.addView(t)
+        }
+        Atalhos.aplicarFonte(caixa, tf)
+
+        caixa.measure(
+            View.MeasureSpec.makeMeasureSpec(largura, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val h = caixa.measuredHeight
+        val loc = IntArray(2)
+        ancora.getLocationOnScreen(loc)
+        val tela = resources.displayMetrics
+        var x = loc[0]
+        if (x + largura > tela.widthPixels - dp(8)) x = tela.widthPixels - largura - dp(8)
+        if (x < dp(8)) x = dp(8)
+        var y = loc[1] + ancora.height
+        if (y + h > tela.heightPixels - dp(8)) y = loc[1] - h
+        if (y < dp(8)) y = dp(8)
+        popup.showAtLocation(ancora, Gravity.NO_GRAVITY, x, y)
+    }
+
+    private fun mostrarMenuApp(ancora: View, p: String) {
+        val itens = ArrayList<ItemMenu>()
+        itens.add(ItemMenu("Abrir") {
+            fecharMenus()
+            abrirPacote(p)
+        })
+        if (p != packageName) {
+            itens.add(ItemMenu("Abrir em janela") {
+                fecharMenus()
+                abrirEmJanela(p)
+            })
+        }
+        val naBarra = lerLista("barra_lista", padraoBarra()).contains(p)
+        itens.add(
+            ItemMenu(if (naBarra) "Desafixar da barra de tarefas" else "Fixar na barra de tarefas") {
+                fecharMenus()
+                alternarFixo(
+                    "barra_lista", padraoBarra(), p,
+                    "Fixado na barra de tarefas", "Removido da barra de tarefas"
+                )
+            }
+        )
+        val naArea = lerLista("desk_lista", padraoDesktop()).contains(p)
+        itens.add(
+            ItemMenu(if (naArea) "Remover da Área de Trabalho" else "Adicionar à Área de Trabalho") {
+                fecharMenus()
+                alternarFixo(
+                    "desk_lista", padraoDesktop(), p,
+                    "Adicionado à Área de Trabalho", "Removido da Área de Trabalho"
+                )
+            }
+        )
+        if (p != packageName && Atalhos.instalado(this, p)) {
+            itens.add(ItemMenu("Configurações do Aplicativo") {
+                fecharMenus()
+                configApp(p)
+            })
+        }
+        mostrarMenu(ancora, itens)
+    }
+
+    private fun comMenu(v: View, p: String) {
+        v.setOnLongClickListener {
+            mostrarMenuApp(v, p)
+            true
+        }
+        v.setOnContextClickListener {
+            mostrarMenuApp(v, p)
+            true
+        }
     }
 
     private fun fecharPainel() {
@@ -269,8 +480,8 @@ class DesktopActivity : Activity() {
     private fun itemGrade(
         nome: String,
         icone: Drawable,
-        acao: () -> Unit,
-        longa: (() -> Unit)?
+        pacote: String?,
+        acao: () -> Unit
     ): LinearLayout {
         val item = LinearLayout(this)
         item.orientation = LinearLayout.VERTICAL
@@ -282,7 +493,7 @@ class DesktopActivity : Activity() {
 
         val t = TextView(this)
         t.text = nome
-        t.setTextColor(Color.WHITE)
+        t.setTextColor(roxoTexto)
         t.textSize = 10f
         t.maxLines = 1
         t.ellipsize = TextUtils.TruncateAt.END
@@ -302,13 +513,7 @@ class DesktopActivity : Activity() {
             fecharMenus()
             acao()
         }
-        if (longa != null) {
-            item.setOnLongClickListener {
-                fecharMenus()
-                longa.invoke()
-                true
-            }
-        }
+        if (pacote != null) comMenu(item, pacote)
         Atalhos.aplicarFonte(item, tf)
         return item
     }
@@ -318,37 +523,32 @@ class DesktopActivity : Activity() {
         g.removeAllViews()
         for (f in ferrs) {
             if (filtro.isNotBlank() && !f.nome.contains(filtro, ignoreCase = true)) continue
-            g.addView(itemGrade(f.nome, f.icone, f.acao, null))
+            g.addView(itemGrade(f.nome, f.icone, null, f.acao))
         }
         for (ri in todosApps) {
             val nome = ri.loadLabel(packageManager).toString()
             if (filtro.isNotBlank() && !nome.contains(filtro, ignoreCase = true)) continue
             val pacote = ri.activityInfo.packageName
-            g.addView(
-                itemGrade(
-                    nome,
-                    ri.loadIcon(packageManager),
-                    { abrirApp(pacote) },
-                    { Atalhos.abrirJanela(this, pacote) }
-                )
-            )
+            g.addView(itemGrade(nome, ri.loadIcon(packageManager), pacote) { abrirApp(pacote) })
         }
     }
 
     private fun montarMenuIniciar(): LinearLayout {
         val m = LinearLayout(this)
         m.orientation = LinearLayout.VERTICAL
-        m.background = arred(Color.parseColor("#F2262222"), 14)
+        val fundo = arred(Color.parseColor("#F21C1230"), 14)
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        m.background = fundo
         m.setPadding(dp(16), dp(14), dp(16), dp(10))
         m.visibility = View.GONE
 
         val busca = EditText(this)
         busca.hint = "Digite aqui para pesquisar"
-        busca.setHintTextColor(Color.parseColor("#B0B0B0"))
+        busca.setHintTextColor(roxoSuave)
         busca.setTextColor(Color.WHITE)
         busca.textSize = 13f
         busca.setSingleLine(true)
-        busca.background = arred(Color.parseColor("#3A3636"), 18)
+        busca.background = arred(Color.parseColor("#3A2A5C"), 18)
         busca.setPadding(dp(16), 0, dp(16), 0)
         busca.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(36)
@@ -366,7 +566,7 @@ class DesktopActivity : Activity() {
 
         val rotulo = TextView(this)
         rotulo.text = "Aplicativos"
-        rotulo.setTextColor(Color.WHITE)
+        rotulo.setTextColor(roxo)
         rotulo.textSize = 13f
         rotulo.setPadding(dp(4), dp(14), 0, dp(6))
 
@@ -387,7 +587,7 @@ class DesktopActivity : Activity() {
 
         val ajustes = TextView(this)
         ajustes.text = "Configurações"
-        ajustes.setTextColor(Color.WHITE)
+        ajustes.setTextColor(roxoTexto)
         ajustes.textSize = 13f
         ajustes.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         ajustes.setOnClickListener {
@@ -397,7 +597,7 @@ class DesktopActivity : Activity() {
 
         val sair = TextView(this)
         sair.text = "Fechar"
-        sair.setTextColor(Color.parseColor("#B0B0B0"))
+        sair.setTextColor(roxoSuave)
         sair.textSize = 13f
         sair.setOnClickListener { fecharMenus() }
 
@@ -411,124 +611,175 @@ class DesktopActivity : Activity() {
         return m
     }
 
-    private fun cab(texto: String): TextView {
-        val t = TextView(this)
-        t.text = texto
-        t.setTextColor(Color.parseColor("#4CC2FF"))
-        t.textSize = 10f
-        t.setPadding(dp(16), dp(10), dp(16), dp(2))
-        return t
+    private fun cartaoSecao(titulo: String, linhas: List<View>): LinearLayout {
+        val c = LinearLayout(this)
+        c.orientation = LinearLayout.VERTICAL
+        c.background = arred(Color.parseColor("#2A1F47"), 12)
+        c.setPadding(0, dp(4), 0, dp(4))
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.setMargins(dp(10), dp(4), dp(10), dp(6))
+        c.layoutParams = lp
+
+        val h = TextView(this)
+        h.text = titulo
+        h.setTextColor(roxo)
+        h.textSize = 10f
+        h.setPadding(dp(14), dp(8), dp(14), dp(2))
+        c.addView(h)
+        for (l in linhas) c.addView(l)
+        return c
     }
 
-    private fun linhaMenu(texto: String, acao: () -> Unit): TextView {
+    private fun linhaCfg(
+        texto: String,
+        valor: String?,
+        fechar: Boolean = true,
+        acao: () -> Unit
+    ): LinearLayout {
+        val l = LinearLayout(this)
+        l.orientation = LinearLayout.HORIZONTAL
+        l.gravity = Gravity.CENTER_VERTICAL
+        l.setPadding(dp(14), dp(10), dp(14), dp(10))
+
         val t = TextView(this)
         t.text = texto
-        t.setTextColor(Color.WHITE)
+        t.setTextColor(roxoTexto)
         t.textSize = 13f
-        t.setPadding(dp(16), dp(9), dp(16), dp(9))
-        t.setOnClickListener {
-            fecharMenus()
+        t.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        l.addView(t)
+
+        if (valor != null) {
+            val v = TextView(this)
+            v.text = valor
+            v.setTextColor(roxoSuave)
+            v.textSize = 12f
+            l.addView(v)
+        }
+
+        val seta = TextView(this)
+        seta.text = "  ›"
+        seta.setTextColor(roxoSuave)
+        seta.textSize = 16f
+        l.addView(seta)
+
+        l.setOnClickListener {
+            if (fechar) fecharMenus()
             acao()
         }
-        return t
+        return l
     }
 
-    private fun linhaCiclo(texto: () -> String, acao: () -> Unit): TextView {
-        val t = TextView(this)
-        t.text = texto()
-        t.setTextColor(Color.WHITE)
-        t.textSize = 13f
-        t.setPadding(dp(16), dp(9), dp(16), dp(9))
-        t.setOnClickListener {
-            acao()
-            t.text = texto()
+    private fun linhaSwitch(texto: String, ler: () -> Boolean, mudar: () -> Unit): LinearLayout {
+        val l = linhaCfg(texto, if (ler()) "Sim" else "Não", false) {}
+        l.setOnClickListener {
+            mudar()
+            (l.getChildAt(1) as TextView).text = if (ler()) "Sim" else "Não"
         }
-        return t
+        return l
     }
 
     private fun montarMenuBandeja(): LinearLayout {
         val m = LinearLayout(this)
         m.orientation = LinearLayout.VERTICAL
-        m.background = arred(Color.parseColor("#F2262222"), 14)
-        m.setPadding(0, dp(4), 0, dp(6))
+        val fundo = arred(Color.parseColor("#F21C1230"), 14)
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        m.background = fundo
+        m.setPadding(0, dp(4), 0, dp(4))
         m.visibility = View.GONE
 
         val itens = LinearLayout(this)
         itens.orientation = LinearLayout.VERTICAL
 
-        itens.addView(cab("SISTEMA"))
-        itens.addView(linhaMenu("Painel rápido") { alternarPainel() })
-        itens.addView(linhaMenu("Fechar apps (liberar RAM)") { limparApps() })
-        itens.addView(linhaMenu("Configurações") { abrirTela(MainActivity::class.java) })
-
-        itens.addView(cab("JANELAS"))
-        itens.addView(linhaMenu("Fechar janelas") { fecharJanelas() })
         itens.addView(
-            linhaMenu("Tamanho: " + Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)]) {
-                Atalhos.escolher(this, "Tamanho das janelas", Atalhos.nomesTamanho) { i ->
-                    Atalhos.setI(this, "jan_tam", i)
-                    recreate()
-                }
-            }
-        )
-        itens.addView(
-            linhaMenu("Zoom da página: " + Atalhos.nomesZoom[Atalhos.indiceZoom(this)]) {
-                Atalhos.escolher(this, "Zoom da página", Atalhos.nomesZoom) { i ->
-                    Atalhos.setI(this, "jan_zoom", i)
-                    recreate()
-                }
-            }
-        )
-        itens.addView(
-            linhaCiclo(
-                { "Apps reais (com login): " + (if (Atalhos.modoApp(this)) "Sim" else "Não") },
-                { Atalhos.setB(this, "modo_app", !Atalhos.modoApp(this)) }
+            cartaoSecao(
+                "SISTEMA",
+                listOf(
+                    linhaCfg("Painel rápido", null) { alternarPainel() },
+                    linhaCfg("Fechar apps (liberar RAM)", null) { limparApps() },
+                    linhaCfg("Configurações", null) { abrirTela(MainActivity::class.java) }
+                )
             )
         )
+
         itens.addView(
-            linhaCiclo(
-                { "Bloqueio de anúncios: " + (if (Atalhos.bloqueio(this)) "Sim" else "Não") },
-                { Atalhos.setB(this, "bloq", !Atalhos.bloqueio(this)) }
+            cartaoSecao(
+                "JANELAS",
+                listOf(
+                    linhaCfg("Fechar janelas", null) { fecharJanelas() },
+                    linhaCfg("Tamanho", Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)]) {
+                        Atalhos.escolher(this, "Tamanho das janelas", Atalhos.nomesTamanho) { i ->
+                            Atalhos.setI(this, "jan_tam", i)
+                            recreate()
+                        }
+                    },
+                    linhaCfg("Zoom da página", Atalhos.nomesZoom[Atalhos.indiceZoom(this)]) {
+                        Atalhos.escolher(this, "Zoom da página", Atalhos.nomesZoom) { i ->
+                            Atalhos.setI(this, "jan_zoom", i)
+                            recreate()
+                        }
+                    },
+                    linhaSwitch(
+                        "Apps reais (com login)",
+                        { Atalhos.modoApp(this) },
+                        { Atalhos.setB(this, "modo_app", !Atalhos.modoApp(this)) }
+                    ),
+                    linhaSwitch(
+                        "Bloqueio de anúncios",
+                        { Atalhos.bloqueio(this) },
+                        { Atalhos.setB(this, "bloq", !Atalhos.bloqueio(this)) }
+                    ),
+                    linhaCfg("Barra do F11", null) { abrirTela(AtalhosActivity::class.java) }
+                )
             )
         )
-        itens.addView(linhaMenu("Barra do F11") { abrirTela(AtalhosActivity::class.java) })
 
-        itens.addView(cab("APARÊNCIA"))
         itens.addView(
-            linhaMenu("Escala do app: " + Atalhos.nomesEscala[Atalhos.indiceEscala(this)]) {
-                Atalhos.escolher(this, "Escala do app", Atalhos.nomesEscala) { i ->
-                    Atalhos.setI(this, "escala", i)
-                    recreate()
-                }
-            }
+            cartaoSecao(
+                "APARÊNCIA",
+                listOf(
+                    linhaCfg("Escala do app", Atalhos.nomesEscala[Atalhos.indiceEscala(this)]) {
+                        Atalhos.escolher(this, "Escala do app", Atalhos.nomesEscala) { i ->
+                            Atalhos.setI(this, "escala", i)
+                            recreate()
+                        }
+                    },
+                    linhaCfg("Fonte", Atalhos.fontes[Atalhos.indiceFonte(this)].second) {
+                        Atalhos.escolher(this, "Fonte", Atalhos.fontes.map { it.second }) { i ->
+                            Atalhos.setI(this, "fonte", i)
+                            recreate()
+                        }
+                    },
+                    linhaCfg("Cursor", Atalhos.cursores[Atalhos.indiceCursor(this)]) {
+                        Atalhos.escolher(this, "Cursor", Atalhos.cursores) { i ->
+                            Atalhos.setI(this, "cursor", i)
+                            recreate()
+                        }
+                    },
+                    linhaCfg("Trocar fundo", null) { escolherFundo() },
+                    linhaCfg("Fundo padrão", null) { fundoPadrao() }
+                )
+            )
         )
-        itens.addView(
-            linhaMenu("Fonte: " + Atalhos.fontes[Atalhos.indiceFonte(this)].second) {
-                Atalhos.escolher(this, "Fonte", Atalhos.fontes.map { it.second }) { i ->
-                    Atalhos.setI(this, "fonte", i)
-                    recreate()
-                }
-            }
-        )
-        itens.addView(
-            linhaMenu("Cursor: " + Atalhos.cursores[Atalhos.indiceCursor(this)]) {
-                Atalhos.escolher(this, "Cursor", Atalhos.cursores) { i ->
-                    Atalhos.setI(this, "cursor", i)
-                    recreate()
-                }
-            }
-        )
-        itens.addView(linhaMenu("Trocar fundo") { escolherFundo() })
-        itens.addView(linhaMenu("Fundo padrão") { fundoPadrao() })
 
-        itens.addView(cab("MOUSE"))
-        itens.addView(linhaMenu("Velocidade lenta") { velocidadeCursor(-4) })
-        itens.addView(linhaMenu("Velocidade normal") { velocidadeCursor(0) })
-        itens.addView(linhaMenu("Velocidade rápida") { velocidadeCursor(5) })
+        itens.addView(
+            cartaoSecao(
+                "MOUSE",
+                listOf(
+                    linhaCfg("Velocidade do mouse", null) {
+                        Atalhos.escolher(this, "Velocidade do mouse", listOf("Lenta", "Normal", "Rápida")) { i ->
+                            velocidadeCursor(if (i == 0) -4 else if (i == 1) 0 else 5)
+                        }
+                    }
+                )
+            )
+        )
 
         val scroll = ScrollView(this)
         scroll.addView(itens)
-        val altura = minOf(dp(340), (resources.displayMetrics.heightPixels * 0.65).toInt())
+        val altura = minOf(dp(380), (resources.displayMetrics.heightPixels * 0.72).toInt())
         scroll.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, altura
         )
@@ -551,6 +802,8 @@ class DesktopActivity : Activity() {
         txt.setTextColor(Color.WHITE)
         txt.setShadowLayer(4f, 0f, 0f, Color.BLACK)
         txt.textSize = 10f
+        txt.maxLines = 1
+        txt.ellipsize = TextUtils.TruncateAt.END
         txt.gravity = Gravity.CENTER
         txt.setPadding(0, dp(3), 0, 0)
 
@@ -563,18 +816,48 @@ class DesktopActivity : Activity() {
         return item
     }
 
-    private fun iconeBarra(icone: Drawable, acao: () -> Unit): ImageView {
+    private fun viewDesktop(p: String): LinearLayout {
+        val v = iconeDesktop(iconeDoPacote(p), rotuloDe(p)) { abrirPacote(p) }
+        comMenu(v, p)
+        return v
+    }
+
+    private fun preencherArea() {
+        val a = areaView ?: return
+        a.removeAllViews()
+        for (p in lerLista("desk_lista", padraoDesktop())) {
+            a.addView(viewDesktop(p))
+        }
+        for (f in ferrs) {
+            a.addView(iconeDesktop(f.icone, f.nome, f.acao))
+        }
+        Atalhos.aplicarFonte(a, tf)
+    }
+
+    private fun iconeBarra(p: String): ImageView {
         val img = ImageView(this)
-        img.setImageDrawable(icone)
+        img.setImageDrawable(iconeDoPacote(p))
         img.setPadding(dp(4), dp(4), dp(4), dp(4))
         val lp = LinearLayout.LayoutParams(dp(34), dp(34))
         lp.setMargins(dp(3), 0, dp(3), 0)
         img.layoutParams = lp
         img.setOnClickListener {
             fecharMenus()
-            acao()
+            abrirPacote(p)
         }
+        comMenu(img, p)
         return img
+    }
+
+    private fun preencherBarra() {
+        val c = centroView ?: return
+        c.removeAllViews()
+        logoView?.let { c.addView(it) }
+        pesquisaView?.let { c.addView(it) }
+        for (p in lerLista("barra_lista", padraoBarra())) {
+            c.addView(iconeBarra(p))
+        }
+        Atalhos.aplicarFonte(c, tf)
     }
 
     private fun logoIniciar(): FrameLayout {
@@ -588,7 +871,7 @@ class DesktopActivity : Activity() {
         logo.columnCount = 2
         for (i in 0 until 4) {
             val q = View(this)
-            q.setBackgroundColor(Color.parseColor("#4CC2FF"))
+            q.setBackgroundColor(roxo)
             val lp = GridLayout.LayoutParams()
             lp.width = dp(9)
             lp.height = dp(9)
@@ -624,10 +907,10 @@ class DesktopActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.parseColor("#202020")
+        window.navigationBarColor = Color.parseColor("#150E26")
 
         ferrs = listOf(
-            Ferr("Calculadora", iconeLetra("=", Color.parseColor("#3D7BFF"))) {
+            Ferr("Calculadora", iconeLetra("=", Color.parseColor("#7C4DFF"))) {
                 abrirTela(CalculadoraActivity::class.java)
             },
             Ferr("Notas", iconeLetra("N", Color.parseColor("#E0A800"))) {
@@ -637,9 +920,6 @@ class DesktopActivity : Activity() {
                 abrirTela(ArquivosActivity::class.java)
             }
         )
-
-        val cinza = Color.parseColor("#555555")
-        val vermelho = Color.parseColor("#E62117")
 
         val r = FrameLayout(this)
         raiz = r
@@ -658,40 +938,16 @@ class DesktopActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
         area.setOnClickListener { fecharMenus() }
-
-        area.addView(iconeDesktop(iconeDe(packageName, cinza), "Este PC") {
-            abrirTela(MainActivity::class.java)
-        })
-        area.addView(iconeDesktop(iconeDe("com.android.chrome", cinza), "Chrome") {
-            abrirJanelaWeb("Chrome", "https://www.google.com")
-        })
-        area.addView(iconeDesktop(iconeOpera(), "Opera") {
-            abrirJanelaWeb("Opera", "https://www.google.com")
-        })
-        area.addView(iconeDesktop(iconeDe("com.google.android.youtube", vermelho), "YouTube") {
-            abrirJanelaWeb("YouTube", "https://www.youtube.com")
-        })
-        area.addView(iconeDesktop(iconeDe("com.zhiliaoapp.musically", cinza), "TikTok") {
-            abrirJanelaWeb("TikTok", "https://www.tiktok.com")
-        })
-        area.addView(iconeDesktop(iconeDe("com.dts.freefireth", cinza), "Free Fire") {
-            abrirApp("com.dts.freefireth")
-        })
-        area.addView(iconeDesktop(iconeDe("moe.shizuku.privileged.api", cinza), "Shizuku") {
-            abrirApp("moe.shizuku.privileged.api")
-        })
-        for (f in ferrs) {
-            area.addView(iconeDesktop(f.icone, f.nome, f.acao))
-        }
+        areaView = area
 
         val barra = FrameLayout(this)
-        barra.setBackgroundColor(Color.parseColor("#E61C1C1C"))
+        barra.setBackgroundColor(Color.parseColor("#E6150E26"))
         barra.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(48)
         )
 
         val filete = View(this)
-        filete.setBackgroundColor(Color.parseColor("#26FFFFFF"))
+        filete.setBackgroundColor(Color.parseColor("#334A2F7A"))
         barra.addView(
             filete,
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(1))
@@ -701,39 +957,22 @@ class DesktopActivity : Activity() {
         centro.orientation = LinearLayout.HORIZONTAL
         centro.gravity = Gravity.CENTER_VERTICAL
         centro.setPadding(0, dp(1), 0, 0)
+        centroView = centro
+
+        logoView = logoIniciar()
 
         val pesquisa = TextView(this)
         pesquisa.text = "Pesquisar"
-        pesquisa.setTextColor(Color.parseColor("#D0D0D0"))
+        pesquisa.setTextColor(roxoTexto)
         pesquisa.textSize = 12f
         pesquisa.gravity = Gravity.CENTER_VERTICAL
         pesquisa.setPadding(dp(16), 0, dp(16), 0)
-        pesquisa.background = arred(Color.parseColor("#2EFFFFFF"), 16)
+        pesquisa.background = arred(Color.parseColor("#33B388FF"), 16)
         val lpPesquisa = LinearLayout.LayoutParams(dp(150), dp(30))
         lpPesquisa.rightMargin = dp(10)
         pesquisa.layoutParams = lpPesquisa
         pesquisa.setOnClickListener { alternarIniciar() }
-
-        centro.addView(logoIniciar())
-        centro.addView(pesquisa)
-        centro.addView(iconeBarra(iconeDe("com.android.chrome", cinza)) {
-            abrirJanelaWeb("Chrome", "https://www.google.com")
-        })
-        centro.addView(iconeBarra(iconeOpera()) {
-            abrirJanelaWeb("Opera", "https://www.google.com")
-        })
-        centro.addView(iconeBarra(iconeDe("com.google.android.youtube", vermelho)) {
-            abrirJanelaWeb("YouTube", "https://www.youtube.com")
-        })
-        centro.addView(iconeBarra(iconeDe("com.zhiliaoapp.musically", cinza)) {
-            abrirJanelaWeb("TikTok", "https://www.tiktok.com")
-        })
-        centro.addView(iconeBarra(iconeDe("com.dts.freefireth", cinza)) {
-            abrirApp("com.dts.freefireth")
-        })
-        centro.addView(iconeBarra(iconeDe("moe.shizuku.privileged.api", cinza)) {
-            abrirApp("moe.shizuku.privileged.api")
-        })
+        pesquisaView = pesquisa
 
         barra.addView(
             centro,
@@ -763,7 +1002,7 @@ class DesktopActivity : Activity() {
         bandeja.maxLines = 1
         bandeja.gravity = Gravity.CENTER
         bandeja.setPadding(dp(10), 0, dp(10), 0)
-        bandeja.background = arred(Color.parseColor("#22FFFFFF"), 8)
+        bandeja.background = arred(Color.parseColor("#22B388FF"), 8)
         val lpBandeja = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)
         )
@@ -788,7 +1027,7 @@ class DesktopActivity : Activity() {
         val data = TextClock(this)
         data.format24Hour = "dd/MM/yyyy"
         data.format12Hour = "dd/MM/yyyy"
-        data.setTextColor(Color.parseColor("#D0D0D0"))
+        data.setTextColor(roxoSuave)
         data.textSize = 10f
         data.maxLines = 1
         data.gravity = Gravity.END
@@ -825,7 +1064,7 @@ class DesktopActivity : Activity() {
 
         val mb = montarMenuBandeja()
         val lpMb = FrameLayout.LayoutParams(
-            dp(250), FrameLayout.LayoutParams.WRAP_CONTENT,
+            minOf(dp(300), larguraTela - dp(16)), FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM or Gravity.END
         )
         lpMb.bottomMargin = dp(54)
@@ -840,5 +1079,6 @@ class DesktopActivity : Activity() {
         Atalhos.aplicarFonte(r, tf)
         carregarApps()
         atualizarBateria()
+        montarFixos()
     }
 }
