@@ -22,12 +22,13 @@ class AtalhosActivity : Activity() {
     private fun prefs() = getSharedPreferences("cfg", Context.MODE_PRIVATE)
 
     private fun existe(p: String): Boolean {
-        return try {
-            packageManager.getApplicationInfo(p, 0)
-            true
-        } catch (e: Throwable) {
-            false
-        }
+        return Atalhos.instalado(this, p) || Atalhos.sites.containsKey(p)
+    }
+
+    private fun rotulo(p: String): String {
+        if (Atalhos.instalado(this, p)) return Atalhos.nomeDe(this, p)
+        val s = Atalhos.sites[p]
+        return if (s != null) s.first + " (site)" else p
     }
 
     private fun padrao(): List<String> {
@@ -43,7 +44,7 @@ class AtalhosActivity : Activity() {
     private fun naBarra(): List<String> {
         val s = prefs().getStringSet("f11", null)
         val l = if (s != null && s.isNotEmpty()) s.toList() else padrao()
-        return l.filter { existe(it) }.sortedBy { Atalhos.nomeDe(this, it).lowercase() }
+        return l.filter { existe(it) }.sortedBy { rotulo(it).lowercase() }
     }
 
     private fun salvar(l: List<String>) {
@@ -52,10 +53,10 @@ class AtalhosActivity : Activity() {
         prefs().edit().putStringSet("f11", s).apply()
     }
 
-    private fun rotulo(t: String): TextView {
+    private fun rotulo(t: String, dummy: Int): TextView {
         val v = TextView(this)
         v.text = t
-        v.setTextColor(Color.parseColor("#4CC2FF"))
+        v.setTextColor(Color.parseColor("#B388FF"))
         v.textSize = 13f
         v.setPadding(dp(4), dp(16), 0, dp(8))
         return v
@@ -66,7 +67,7 @@ class AtalhosActivity : Activity() {
         l.orientation = LinearLayout.HORIZONTAL
         l.gravity = Gravity.CENTER_VERTICAL
         val g = GradientDrawable()
-        g.setColor(Color.parseColor("#2B2B2B"))
+        g.setColor(Color.parseColor("#2A1F47"))
         g.cornerRadius = dp(8).toFloat()
         l.background = g
         l.setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -99,7 +100,7 @@ class AtalhosActivity : Activity() {
         c.removeAllViews()
         val atuais = naBarra()
 
-        c.addView(rotulo("Na barra agora (toque para tirar)"))
+        c.addView(rotulo("Na barra agora (toque para tirar)", 0))
         if (atuais.isEmpty()) {
             val v = TextView(this)
             v.text = "Nenhum app na barra"
@@ -108,28 +109,32 @@ class AtalhosActivity : Activity() {
             c.addView(v)
         }
         for (p in atuais) {
-            c.addView(linha(Atalhos.nomeDe(this, p), "×", Color.parseColor("#FF6B6B")) {
+            c.addView(linha(rotulo(p), "×", Color.parseColor("#FF6B6B")) {
                 salvar(atuais - p)
                 render()
             })
         }
 
-        c.addView(rotulo("Adicionar à barra"))
+        c.addView(rotulo("Adicionar à barra", 0))
         val principal = Intent(Intent.ACTION_MAIN)
         principal.addCategory(Intent.CATEGORY_LAUNCHER)
-        val outros = packageManager.queryIntentActivities(principal, 0)
+        val instalados = packageManager.queryIntentActivities(principal, 0)
             .map { Pair(it.loadLabel(packageManager).toString(), it.activityInfo.packageName) }
+        val sites = Atalhos.sites.keys
+            .filter { !Atalhos.instalado(this, it) }
+            .map { Pair(rotulo(it), it) }
+        val outros = (instalados + sites)
             .filter { it.second != packageName && !atuais.contains(it.second) }
             .distinctBy { it.second }
             .sortedBy { it.first.lowercase() }
         for (par in outros) {
-            c.addView(linha(par.first, "+", Color.parseColor("#4CC2FF")) {
+            c.addView(linha(par.first, "+", Color.parseColor("#B388FF")) {
                 salvar(atuais + par.second)
                 render()
             })
         }
 
-        c.addView(rotulo("Padrão"))
+        c.addView(rotulo("Padrão", 0))
         c.addView(linha("Restaurar padrão", "↺", Color.WHITE) {
             prefs().edit().remove("f11").apply()
             render()
@@ -138,11 +143,11 @@ class AtalhosActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.parseColor("#202020")
-        window.navigationBarColor = Color.parseColor("#202020")
+        window.statusBarColor = Color.parseColor("#150E26")
+        window.navigationBarColor = Color.parseColor("#150E26")
 
         val scroll = ScrollView(this)
-        scroll.setBackgroundColor(Color.parseColor("#202020"))
+        scroll.setBackgroundColor(Color.parseColor("#150E26"))
 
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
@@ -175,6 +180,11 @@ class AtalhosActivity : Activity() {
         col.addView(lista)
 
         setContentView(scroll)
+        render()
+    }
+
+    override fun onResume() {
+        super.onResume()
         render()
     }
 }
