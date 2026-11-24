@@ -16,15 +16,19 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
+import android.widget.TextClock
 import android.widget.TextView
 
 class TeclaService : AccessibilityService() {
@@ -33,6 +37,8 @@ class TeclaService : AccessibilityService() {
     private var barra: View? = null
     private var painel: View? = null
     private var resolucao: View? = null
+    private var taskbar: View? = null
+    private var iniciar: View? = null
     private var ultimoF5 = 0L
 
     private fun dp(v: Int): Int {
@@ -78,11 +84,11 @@ class TeclaService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val k = event.keyCode
-        val tratar = k == KeyEvent.KEYCODE_F4 || k == KeyEvent.KEYCODE_F5 ||
-            k == KeyEvent.KEYCODE_F6 || k == KeyEvent.KEYCODE_F7 ||
-            k == KeyEvent.KEYCODE_F8 || k == KeyEvent.KEYCODE_F9 ||
-            k == KeyEvent.KEYCODE_F10 || k == KeyEvent.KEYCODE_F11 ||
-            k == KeyEvent.KEYCODE_F12
+        val tratar = k == KeyEvent.KEYCODE_F3 || k == KeyEvent.KEYCODE_F4 ||
+            k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F6 ||
+            k == KeyEvent.KEYCODE_F7 || k == KeyEvent.KEYCODE_F8 ||
+            k == KeyEvent.KEYCODE_F9 || k == KeyEvent.KEYCODE_F10 ||
+            k == KeyEvent.KEYCODE_F11 || k == KeyEvent.KEYCODE_F12
         if (!tratar) return false
 
         if (k == KeyEvent.KEYCODE_F5 && JanelaService.total == 0) {
@@ -92,6 +98,7 @@ class TeclaService : AccessibilityService() {
 
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (k) {
+                KeyEvent.KEYCODE_F3 -> alternarTaskbar()
                 KeyEvent.KEYCODE_F4 -> alternarFixar()
                 KeyEvent.KEYCODE_F5 -> {
                     if (JanelaService.total > 0) recarregarJanela() else reiniciarApp()
@@ -131,6 +138,7 @@ class TeclaService : AccessibilityService() {
 
     private fun irParaInicio() {
         esconder()
+        esconderTaskbar()
         performGlobalAction(GLOBAL_ACTION_HOME)
         abrirTela(DesktopActivity::class.java)
     }
@@ -332,6 +340,23 @@ class TeclaService : AccessibilityService() {
         barra = null
     }
 
+    private fun esconderIniciar() {
+        try {
+            iniciar?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        iniciar = null
+    }
+
+    private fun esconderTaskbar() {
+        esconderIniciar()
+        try {
+            taskbar?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        taskbar = null
+    }
+
     private fun iconeLetra(letra: String, cor: Int): Drawable {
         val tam = 96
         val bmp = Bitmap.createBitmap(tam, tam, Bitmap.Config.ARGB_8888)
@@ -386,6 +411,29 @@ class TeclaService : AccessibilityService() {
         return lista.filter { existe(it) }.sortedBy { rotulo(it).lowercase() }
     }
 
+    private fun padraoFixados(): List<String> {
+        val l = ArrayList<String>()
+        l.add("com.android.chrome")
+        l.add(Atalhos.pacoteOpera(this) ?: "com.opera.browser")
+        l.add("com.google.android.youtube")
+        l.add("com.zhiliaoapp.musically")
+        l.add("com.dts.freefireth")
+        l.add("moe.shizuku.privileged.api")
+        return l
+    }
+
+    private fun listaFixados(): List<String> {
+        val s = getSharedPreferences("cfg", Context.MODE_PRIVATE).getString("barra_lista", null)
+        val base: List<String> = if (s == null) {
+            padraoFixados()
+        } else if (s.isEmpty()) {
+            emptyList()
+        } else {
+            s.split(",")
+        }
+        return base.filter { it != packageName && existe(it) }
+    }
+
     private fun abrir(pacote: String) {
         val site = Atalhos.sites[pacote]
         if (site != null) {
@@ -398,6 +446,16 @@ class TeclaService : AccessibilityService() {
             }
         } else {
             Atalhos.abrirJanela(this, pacote)
+        }
+    }
+
+    private fun abrirDaBarra(p: String) {
+        if (p == "com.dts.freefireth" || p == "com.dts.freefiremax" ||
+            p == "moe.shizuku.privileged.api"
+        ) {
+            Atalhos.abrirNormal(this, p)
+        } else {
+            abrir(p)
         }
     }
 
@@ -461,6 +519,203 @@ class TeclaService : AccessibilityService() {
             acao()
         }
         return v
+    }
+
+    private fun logoStart(): LinearLayout {
+        val caixa = LinearLayout(this)
+        caixa.gravity = Gravity.CENTER
+        val lpCaixa = LinearLayout.LayoutParams(dp(38), dp(38))
+        lpCaixa.setMargins(dp(2), 0, dp(6), 0)
+        caixa.layoutParams = lpCaixa
+
+        val grade = GridLayout(this)
+        grade.rowCount = 2
+        grade.columnCount = 2
+        for (i in 0 until 4) {
+            val q = View(this)
+            q.setBackgroundColor(Color.parseColor("#B388FF"))
+            val lp = GridLayout.LayoutParams()
+            lp.width = dp(9)
+            lp.height = dp(9)
+            lp.setMargins(dp(1), dp(1), dp(1), dp(1))
+            q.layoutParams = lp
+            grade.addView(q)
+        }
+        caixa.addView(grade)
+        caixa.setOnClickListener { alternarIniciar() }
+        return caixa
+    }
+
+    private fun iconeTaskbar(p: String): ImageView {
+        val img = ImageView(this)
+        img.setImageDrawable(iconeDe(p))
+        img.setPadding(dp(4), dp(4), dp(4), dp(4))
+        val lp = LinearLayout.LayoutParams(dp(38), dp(38))
+        lp.setMargins(dp(3), 0, dp(3), 0)
+        img.layoutParams = lp
+        img.setOnClickListener {
+            esconderTaskbar()
+            abrirDaBarra(p)
+        }
+        img.setOnLongClickListener {
+            esconderTaskbar()
+            Atalhos.abrirNormal(this, p)
+            true
+        }
+        return img
+    }
+
+    private fun alternarIniciar() {
+        if (iniciar != null) {
+            esconderIniciar()
+            return
+        }
+        if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val principal = Intent(Intent.ACTION_MAIN)
+        principal.addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = packageManager.queryIntentActivities(principal, 0)
+            .filter { it.activityInfo.packageName != packageName }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+
+        val g = GridLayout(this)
+        g.columnCount = 5
+        for (ri in apps) {
+            val pkg = ri.activityInfo.packageName
+            val item = LinearLayout(this)
+            item.orientation = LinearLayout.VERTICAL
+            item.gravity = Gravity.CENTER_HORIZONTAL
+
+            val img = ImageView(this)
+            img.setImageDrawable(ri.loadIcon(packageManager))
+            img.layoutParams = LinearLayout.LayoutParams(dp(36), dp(36))
+
+            val nome = TextView(this)
+            nome.text = ri.loadLabel(packageManager).toString()
+            nome.setTextColor(Color.parseColor("#E4D4FF"))
+            nome.textSize = 10f
+            nome.maxLines = 1
+            nome.ellipsize = TextUtils.TruncateAt.END
+            nome.gravity = Gravity.CENTER
+            nome.setPadding(0, dp(3), 0, 0)
+
+            item.addView(img)
+            item.addView(nome)
+
+            val lp = GridLayout.LayoutParams()
+            lp.width = dp(72)
+            lp.height = GridLayout.LayoutParams.WRAP_CONTENT
+            lp.setMargins(dp(2), dp(6), dp(2), dp(6))
+            item.layoutParams = lp
+
+            item.setOnClickListener {
+                esconderTaskbar()
+                abrirDaBarra(pkg)
+            }
+            item.setOnLongClickListener {
+                esconderTaskbar()
+                Atalhos.abrirNormal(this, pkg)
+                true
+            }
+            g.addView(item)
+        }
+
+        val scroll = ScrollView(this)
+        scroll.addView(g)
+        scroll.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(250)
+        )
+
+        val titulo = TextView(this)
+        titulo.text = "Aplicativos  (toque: janela, segure: normal)"
+        titulo.setTextColor(Color.parseColor("#B388FF"))
+        titulo.textSize = 12f
+        titulo.setPadding(dp(4), 0, 0, dp(6))
+
+        val caixa = LinearLayout(this)
+        caixa.orientation = LinearLayout.VERTICAL
+        val fundo = GradientDrawable()
+        fundo.setColor(Color.parseColor("#F21C1230"))
+        fundo.cornerRadius = dp(14).toFloat()
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        caixa.background = fundo
+        caixa.setPadding(dp(12), dp(12), dp(12), dp(8))
+        caixa.addView(titulo)
+        caixa.addView(scroll)
+
+        val largura = minOf(dp(440), resources.displayMetrics.widthPixels - dp(16))
+        val params = WindowManager.LayoutParams(
+            largura,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        params.y = dp(72)
+
+        wm?.addView(caixa, params)
+        iniciar = caixa
+    }
+
+    private fun alternarTaskbar() {
+        if (taskbar != null) {
+            esconderTaskbar()
+            return
+        }
+        if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val fundo = GradientDrawable()
+        fundo.setColor(Color.parseColor("#F2150E26"))
+        fundo.cornerRadius = dp(24).toFloat()
+        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+
+        val linha = LinearLayout(this)
+        linha.orientation = LinearLayout.HORIZONTAL
+        linha.gravity = Gravity.CENTER_VERTICAL
+        linha.background = fundo
+        linha.setPadding(dp(10), dp(6), dp(10), dp(6))
+
+        linha.addView(logoStart())
+        for (p in listaFixados()) {
+            linha.addView(iconeTaskbar(p))
+        }
+
+        val relogio = TextClock(this)
+        relogio.format24Hour = "HH:mm"
+        relogio.format12Hour = "HH:mm"
+        relogio.setTextColor(Color.parseColor("#E4D4FF"))
+        relogio.textSize = 13f
+        relogio.setPadding(dp(12), 0, dp(6), 0)
+        linha.addView(relogio)
+
+        linha.addView(texto("×", false) { fecharJanelas() })
+        linha.addView(texto("⌂", false) { irParaInicio() })
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        params.y = dp(10)
+
+        linha.setOnTouchListener { _, e ->
+            if (e.action == MotionEvent.ACTION_OUTSIDE) {
+                esconderTaskbar()
+                true
+            } else {
+                false
+            }
+        }
+
+        wm?.addView(linha, params)
+        taskbar = linha
     }
 
     private fun controleBrilho(): SeekBar {
@@ -554,6 +809,7 @@ class TeclaService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         esconder()
+        esconderTaskbar()
         fecharResolucao()
         return super.onUnbind(intent)
     }
