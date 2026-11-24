@@ -168,12 +168,14 @@ class JanelaService : Service() {
             "TikTok" -> "com.zhiliaoapp.musically"
             else -> null
         }
-        if (pacote != null && Atalhos.instalado(this, pacote) &&
-            (titulo == "Opera" || Atalhos.modoApp(this))
-        ) {
-            Atalhos.abrirJanela(this, pacote)
-            if (janelas.isEmpty()) stopSelf()
-            return START_NOT_STICKY
+        if (pacote != null) {
+            if (Atalhos.instalado(this, pacote)) {
+                Atalhos.aviso(this, "Abrindo " + Atalhos.nomeDe(this, pacote) + " em janela")
+                Atalhos.abrirJanela(this, pacote)
+                if (janelas.isEmpty()) stopSelf()
+                return START_NOT_STICKY
+            }
+            Atalhos.aviso(this, titulo + " não está instalado: abrindo o site (sem login)")
         }
 
         if (url != null) criarJanela(titulo, url)
