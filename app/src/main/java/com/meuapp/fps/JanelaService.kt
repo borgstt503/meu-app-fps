@@ -203,7 +203,7 @@ class JanelaService : Service() {
     private fun botao(texto: String): TextView {
         val b = TextView(this)
         b.text = texto
-        b.setTextColor(Color.parseColor("#CDB4FF"))
+        b.setTextColor(Atalhos.claroTema(this))
         b.textSize = 16f
         b.gravity = Gravity.CENTER
         b.setPadding(dp(9), 0, dp(9), 0)
@@ -224,11 +224,13 @@ class JanelaService : Service() {
         val minW = dp(240)
         val minH = dp(170)
         val tf = Atalhos.typeface(this)
+        val acento = Atalhos.acento(this)
+        val corClaro = Atalhos.claroTema(this)
 
         val moldura = GradientDrawable()
-        moldura.setColor(Color.parseColor("#1C1230"))
+        moldura.setColor(Atalhos.fundoTema(this))
         moldura.cornerRadius = dp(14).toFloat()
-        moldura.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        moldura.setStroke(dp(1), Atalhos.bordaTema(this))
 
         val raiz = LinearLayout(this)
         raiz.orientation = LinearLayout.VERTICAL
@@ -238,12 +240,12 @@ class JanelaService : Service() {
         val barra = LinearLayout(this)
         barra.orientation = LinearLayout.HORIZONTAL
         barra.gravity = Gravity.CENTER_VERTICAL
-        barra.setBackgroundColor(Color.parseColor("#2A1747"))
+        barra.setBackgroundColor(Atalhos.cartaoTema(this))
         barra.setPadding(dp(12), 0, dp(4), 0)
 
         val t = TextView(this)
         t.text = titulo
-        t.setTextColor(Color.parseColor("#E4D4FF"))
+        t.setTextColor(corClaro)
         t.textSize = 13f
         t.maxLines = 1
         t.gravity = Gravity.CENTER_VERTICAL
@@ -388,9 +390,7 @@ class JanelaService : Service() {
                 wm?.updateViewLayout(raiz, params)
             } catch (e: Throwable) {
             }
-            teclado.setTextColor(
-                if (ligar) Color.parseColor("#B388FF") else Color.parseColor("#CDB4FF")
-            )
+            teclado.setTextColor(if (ligar) acento else corClaro)
             if (ligar) web.requestFocus()
         }
 
