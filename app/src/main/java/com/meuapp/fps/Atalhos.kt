@@ -376,6 +376,39 @@ object Atalhos {
         }
     }
 
+    fun ajustarJanela(c: Context, pacote: String) {
+        val m = c.resources.displayMetrics
+        val frac = tamanhos[indiceTamanho(c)]
+        val ww = (m.widthPixels * frac).toInt()
+        val hh = (m.heightPixels * minOf(0.9f, frac + 0.1f)).toInt()
+        val l = (m.widthPixels - ww) / 2
+        val t = (m.heightPixels - hh) / 2
+
+        var id: String? = null
+        for (i in 0 until 8) {
+            try {
+                Thread.sleep(500)
+            } catch (e: Throwable) {
+            }
+            val r = rodar("dumpsys activity activities | grep ResumedActivity")
+            if (r.contains(pacote)) {
+                id = Regex("t(\\d+)\\}").find(r)?.groupValues?.get(1)
+                if (id != null) break
+            }
+        }
+        if (id == null) {
+            aviso(c, "Janela aberta, mas não achei a tarefa para ajustar o tamanho")
+            return
+        }
+        val s = rodar(
+            "am task resize " + id + " " + l + " " + t + " " +
+                (l + ww) + " " + (t + hh) + " 2>&1"
+        )
+        if (s.contains("Error", true) || s.contains("Exception", true)) {
+            aviso(c, "Ajuste de tamanho falhou: " + s.take(120))
+        }
+    }
+
     fun abrirJanela(c: Context, pacote: String) {
         if (!shizukuOk()) {
             aviso(c, "Shizuku desligado: abrindo em tela cheia")
@@ -396,6 +429,11 @@ object Atalhos {
             if (r.contains("Error", true) || r.contains("Exception", true)) {
                 aviso(c, "Janela livre falhou: " + r.take(140))
                 abrirNormal(c, pacote)
+            } else {
+                if (r.contains("brought to the front", true)) {
+                    aviso(c, "O app já estava aberto em tela cheia. Feche e abra de novo pelo Sent")
+                }
+                ajustarJanela(c, pacote)
             }
         }.start()
     }
