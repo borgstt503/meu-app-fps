@@ -32,11 +32,11 @@ class MainActivity : Activity() {
     private val itensMenu = ArrayList<TextView>()
     private var secaoAtual = 0
     private var listaAberta = false
-
-    private val corFundo = Color.parseColor("#202020")
-    private val corCartao = Color.parseColor("#2B2B2B")
-    private val suave = Color.parseColor("#A8A8A8")
-    private val azul = Color.parseColor("#4CC2FF")
+    private val corFundo by lazy { Atalhos.fundoTema(this) }
+    private val corCartao by lazy { Atalhos.cartaoTema(this) }
+    private val suave by lazy { Atalhos.suaveTema(this) }
+    private val azul by lazy { Atalhos.acento(this) }
+    
 
     private val fixos = setOf(
         "com.dts.freefireth",
