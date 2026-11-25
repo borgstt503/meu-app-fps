@@ -39,10 +39,31 @@ class TeclaService : AccessibilityService() {
     private var resolucao: View? = null
     private var taskbar: View? = null
     private var iniciar: View? = null
+    private var controle: View? = null
     private var ultimoF5 = 0L
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
+    }
+
+    private fun ac(): Int {
+        return Atalhos.acento(this)
+    }
+
+    private fun claro(): Int {
+        return Atalhos.claroTema(this)
+    }
+
+    private fun fundoT(a: Int): Int {
+        return Atalhos.comAlfa(Atalhos.fundoTema(this), a)
+    }
+
+    private fun bordaT(): Int {
+        return Atalhos.bordaTema(this)
+    }
+
+    private fun cartaoT(): Int {
+        return Atalhos.cartaoTema(this)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -84,7 +105,8 @@ class TeclaService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val k = event.keyCode
-        val tratar = k == KeyEvent.KEYCODE_F3 || k == KeyEvent.KEYCODE_F4 ||
+        val tratar = k == KeyEvent.KEYCODE_F1 || k == KeyEvent.KEYCODE_F2 ||
+            k == KeyEvent.KEYCODE_F3 || k == KeyEvent.KEYCODE_F4 ||
             k == KeyEvent.KEYCODE_F5 || k == KeyEvent.KEYCODE_F6 ||
             k == KeyEvent.KEYCODE_F7 || k == KeyEvent.KEYCODE_F8 ||
             k == KeyEvent.KEYCODE_F9 || k == KeyEvent.KEYCODE_F10 ||
@@ -98,6 +120,8 @@ class TeclaService : AccessibilityService() {
 
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (k) {
+                KeyEvent.KEYCODE_F1 -> Janelas.captura(this)
+                KeyEvent.KEYCODE_F2 -> alternarControle()
                 KeyEvent.KEYCODE_F3 -> alternarTaskbar()
                 KeyEvent.KEYCODE_F4 -> alternarFixar()
                 KeyEvent.KEYCODE_F5 -> {
@@ -139,6 +163,7 @@ class TeclaService : AccessibilityService() {
     private fun irParaInicio() {
         esconder()
         esconderTaskbar()
+        esconderControle()
         performGlobalAction(GLOBAL_ACTION_HOME)
         abrirTela(DesktopActivity::class.java)
     }
@@ -216,11 +241,11 @@ class TeclaService : AccessibilityService() {
     private fun botaoRes(texto: String, acao: () -> Unit): TextView {
         val b = TextView(this)
         b.text = texto
-        b.setTextColor(Color.parseColor("#E4D4FF"))
+        b.setTextColor(claro())
         b.textSize = 14f
         b.gravity = Gravity.CENTER
         val g = GradientDrawable()
-        g.setColor(Color.parseColor("#3A2A5C"))
+        g.setColor(cartaoT())
         g.cornerRadius = dp(10).toFloat()
         b.background = g
         val lp = LinearLayout.LayoutParams(
@@ -242,20 +267,20 @@ class TeclaService : AccessibilityService() {
         val caixa = LinearLayout(this)
         caixa.orientation = LinearLayout.VERTICAL
         val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#F21C1230"))
+        fundo.setColor(fundoT(0xF2))
         fundo.cornerRadius = dp(14).toFloat()
-        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        fundo.setStroke(dp(1), bordaT())
         caixa.background = fundo
         caixa.setPadding(dp(16), dp(14), dp(16), dp(14))
 
         val titulo = TextView(this)
         titulo.text = "Resolução da tela"
-        titulo.setTextColor(Color.parseColor("#B388FF"))
+        titulo.setTextColor(ac())
         titulo.textSize = 14f
 
         val status = TextView(this)
         status.text = "Ligue o Shizuku para usar"
-        status.setTextColor(Color.parseColor("#E4D4FF"))
+        status.setTextColor(claro())
         status.textSize = 12f
         status.setPadding(0, dp(8), 0, dp(4))
 
@@ -355,6 +380,14 @@ class TeclaService : AccessibilityService() {
         } catch (e: Throwable) {
         }
         taskbar = null
+    }
+
+    private fun esconderControle() {
+        try {
+            controle?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        controle = null
     }
 
     private fun iconeLetra(letra: String, cor: Int): Drawable {
@@ -507,7 +540,7 @@ class TeclaService : AccessibilityService() {
     private fun texto(t: String, fechaBarra: Boolean, acao: () -> Unit): TextView {
         val v = TextView(this)
         v.text = t
-        v.setTextColor(Color.parseColor("#D0D0D0"))
+        v.setTextColor(claro())
         v.textSize = 20f
         v.gravity = Gravity.CENTER
         v.setPadding(dp(10), 0, dp(10), 0)
@@ -519,6 +552,67 @@ class TeclaService : AccessibilityService() {
             acao()
         }
         return v
+    }
+
+    private fun chip(t: String, acao: () -> Unit): TextView {
+        val v = TextView(this)
+        v.text = t
+        v.setTextColor(claro())
+        v.textSize = 13f
+        v.gravity = Gravity.CENTER
+        val g = GradientDrawable()
+        g.setColor(cartaoT())
+        g.cornerRadius = dp(10).toFloat()
+        v.background = g
+        v.setPadding(dp(12), 0, dp(12), 0)
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)
+        )
+        lp.setMargins(dp(3), 0, dp(3), 0)
+        v.layoutParams = lp
+        v.setOnClickListener { acao() }
+        return v
+    }
+
+    private fun alternarControle() {
+        if (controle != null) {
+            esconderControle()
+            return
+        }
+        if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val fundo = GradientDrawable()
+        fundo.setColor(fundoT(0xF2))
+        fundo.cornerRadius = dp(24).toFloat()
+        fundo.setStroke(dp(1), bordaT())
+
+        val linha = LinearLayout(this)
+        linha.orientation = LinearLayout.HORIZONTAL
+        linha.gravity = Gravity.CENTER_VERTICAL
+        linha.background = fundo
+        linha.setPadding(dp(10), dp(8), dp(10), dp(8))
+
+        linha.addView(chip("Esq") { Janelas.metade(this, false) })
+        linha.addView(chip("Dir") { Janelas.metade(this, true) })
+        linha.addView(chip("−") { Janelas.mudarTamanho(this, 0.87f) })
+        linha.addView(chip("+") { Janelas.mudarTamanho(this, 1.15f) })
+        linha.addView(chip("Máx") { Janelas.maximizar(this) })
+        linha.addView(chip("Padrão") { Janelas.padrao(this) })
+        linha.addView(chip("Foto") { Janelas.captura(this) })
+        linha.addView(chip("×") { esconderControle() })
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        params.y = dp(70)
+
+        wm?.addView(linha, params)
+        controle = linha
     }
 
     private fun logoStart(): LinearLayout {
@@ -533,7 +627,7 @@ class TeclaService : AccessibilityService() {
         grade.columnCount = 2
         for (i in 0 until 4) {
             val q = View(this)
-            q.setBackgroundColor(Color.parseColor("#B388FF"))
+            q.setBackgroundColor(ac())
             val lp = GridLayout.LayoutParams()
             lp.width = dp(9)
             lp.height = dp(9)
@@ -592,7 +686,7 @@ class TeclaService : AccessibilityService() {
 
             val nome = TextView(this)
             nome.text = ri.loadLabel(packageManager).toString()
-            nome.setTextColor(Color.parseColor("#E4D4FF"))
+            nome.setTextColor(claro())
             nome.textSize = 10f
             nome.maxLines = 1
             nome.ellipsize = TextUtils.TruncateAt.END
@@ -628,16 +722,16 @@ class TeclaService : AccessibilityService() {
 
         val titulo = TextView(this)
         titulo.text = "Aplicativos  (toque: janela, segure: normal)"
-        titulo.setTextColor(Color.parseColor("#B388FF"))
+        titulo.setTextColor(ac())
         titulo.textSize = 12f
         titulo.setPadding(dp(4), 0, 0, dp(6))
 
         val caixa = LinearLayout(this)
         caixa.orientation = LinearLayout.VERTICAL
         val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#F21C1230"))
+        fundo.setColor(fundoT(0xF2))
         fundo.cornerRadius = dp(14).toFloat()
-        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        fundo.setStroke(dp(1), bordaT())
         caixa.background = fundo
         caixa.setPadding(dp(12), dp(12), dp(12), dp(8))
         caixa.addView(titulo)
@@ -667,9 +761,9 @@ class TeclaService : AccessibilityService() {
         if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#F2150E26"))
+        fundo.setColor(fundoT(0xF2))
         fundo.cornerRadius = dp(24).toFloat()
-        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        fundo.setStroke(dp(1), bordaT())
 
         val linha = LinearLayout(this)
         linha.orientation = LinearLayout.HORIZONTAL
@@ -685,11 +779,13 @@ class TeclaService : AccessibilityService() {
         val relogio = TextClock(this)
         relogio.format24Hour = "HH:mm"
         relogio.format12Hour = "HH:mm"
-        relogio.setTextColor(Color.parseColor("#E4D4FF"))
+        relogio.setTextColor(claro())
         relogio.textSize = 13f
         relogio.setPadding(dp(12), 0, dp(6), 0)
         linha.addView(relogio)
 
+        linha.addView(texto("−", false) { Janelas.mudarTamanho(this, 0.87f) })
+        linha.addView(texto("+", false) { Janelas.mudarTamanho(this, 1.15f) })
         linha.addView(texto("×", false) { fecharJanelas() })
         linha.addView(texto("⌂", false) { irParaInicio() })
 
@@ -722,8 +818,8 @@ class TeclaService : AccessibilityService() {
         val s = SeekBar(this)
         s.max = 255
         s.progress = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
-        s.progressTintList = ColorStateList.valueOf(Color.parseColor("#B388FF"))
-        s.thumbTintList = ColorStateList.valueOf(Color.parseColor("#B388FF"))
+        s.progressTintList = ColorStateList.valueOf(ac())
+        s.thumbTintList = ColorStateList.valueOf(ac())
         s.layoutParams = LinearLayout.LayoutParams(dp(110), dp(38))
         s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
@@ -751,9 +847,9 @@ class TeclaService : AccessibilityService() {
         if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val fundo = GradientDrawable()
-        fundo.setColor(Color.parseColor("#E61C1230"))
+        fundo.setColor(fundoT(0xE6))
         fundo.cornerRadius = dp(24).toFloat()
-        fundo.setStroke(dp(1), Color.parseColor("#4A2F7A"))
+        fundo.setStroke(dp(1), bordaT())
 
         val linha = LinearLayout(this)
         linha.orientation = LinearLayout.HORIZONTAL
@@ -782,7 +878,7 @@ class TeclaService : AccessibilityService() {
 
         val sol = TextView(this)
         sol.text = "☀"
-        sol.setTextColor(Color.parseColor("#CDB4FF"))
+        sol.setTextColor(claro())
         sol.textSize = 16f
         sol.setPadding(dp(8), 0, 0, 0)
         linha.addView(sol)
@@ -810,6 +906,7 @@ class TeclaService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         esconder()
         esconderTaskbar()
+        esconderControle()
         fecharResolucao()
         return super.onUnbind(intent)
     }
