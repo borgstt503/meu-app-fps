@@ -75,6 +75,14 @@ object Atalhos {
     val escalas = floatArrayOf(0.7f, 0.8f, 0.9f, 1.0f, 1.15f, 1.3f)
     val nomesEscala = listOf("70%", "80%", "90%", "100%", "115%", "130%")
 
+    val nomesTema = listOf("Roxo", "Azul", "Verde", "Vermelho", "Laranja", "Rosa", "Ciano", "Cinza")
+    private val acentos = listOf("#B388FF", "#64B5F6", "#69F0AE", "#FF6B6B", "#FFAB40", "#FF80AB", "#4DD0E1", "#B0BEC5")
+    private val fundosTema = listOf("#150E26", "#0D1726", "#0D2018", "#260E0E", "#26180D", "#260E1A", "#0D2326", "#1A1A1A")
+    private val cartoesTema = listOf("#2A1F47", "#1C2D4A", "#1B3A2B", "#4A1F1F", "#4A331F", "#4A1F35", "#1F434A", "#2E2E2E")
+    private val bordasTema = listOf("#4A2F7A", "#2F5A8A", "#2F7A55", "#7A2F2F", "#7A5A2F", "#7A2F58", "#2F7A83", "#505050")
+    private val suavesTema = listOf("#B7A5D6", "#A5C0D6", "#A5D6BA", "#D6A5A5", "#D6BFA5", "#D6A5BE", "#A5D3D6", "#B8B8B8")
+    private val clarosTema = listOf("#E4D4FF", "#D4E8FF", "#D4FFE6", "#FFD4D4", "#FFE8D4", "#FFD4E8", "#D4F8FF", "#EEEEEE")
+
     var cursorImg: Bitmap? = null
 
     private fun prefs(c: Context) = c.getSharedPreferences("cfg", Context.MODE_PRIVATE)
@@ -93,6 +101,38 @@ object Atalhos {
 
     fun setB(c: Context, k: String, v: Boolean) {
         prefs(c).edit().putBoolean(k, v).apply()
+    }
+
+    fun indiceTema(c: Context): Int {
+        return getI(c, "tema", 0).coerceIn(0, nomesTema.size - 1)
+    }
+
+    fun acento(c: Context): Int {
+        return Color.parseColor(acentos[indiceTema(c)])
+    }
+
+    fun fundoTema(c: Context): Int {
+        return Color.parseColor(fundosTema[indiceTema(c)])
+    }
+
+    fun cartaoTema(c: Context): Int {
+        return Color.parseColor(cartoesTema[indiceTema(c)])
+    }
+
+    fun bordaTema(c: Context): Int {
+        return Color.parseColor(bordasTema[indiceTema(c)])
+    }
+
+    fun suaveTema(c: Context): Int {
+        return Color.parseColor(suavesTema[indiceTema(c)])
+    }
+
+    fun claroTema(c: Context): Int {
+        return Color.parseColor(clarosTema[indiceTema(c)])
+    }
+
+    fun comAlfa(cor: Int, a: Int): Int {
+        return Color.argb(a, Color.red(cor), Color.green(cor), Color.blue(cor))
     }
 
     fun indiceTamanho(c: Context): Int {
