@@ -120,7 +120,7 @@ class TeclaService : AccessibilityService() {
 
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (k) {
-                KeyEvent.KEYCODE_F1 -> Janelas.captura(this)
+                KeyEvent.KEYCODE_F1 -> recentes()
                 KeyEvent.KEYCODE_F2 -> alternarControle()
                 KeyEvent.KEYCODE_F3 -> alternarTaskbar()
                 KeyEvent.KEYCODE_F4 -> alternarFixar()
@@ -158,6 +158,13 @@ class TeclaService : AccessibilityService() {
         } else {
             Atalhos.aviso(this, "Nenhuma janela flutuante aberta")
         }
+    }
+
+    private fun recentes() {
+        esconder()
+        esconderTaskbar()
+        esconderControle()
+        performGlobalAction(GLOBAL_ACTION_RECENTS)
     }
 
     private fun irParaInicio() {
@@ -230,6 +237,14 @@ class TeclaService : AccessibilityService() {
         }.start()
     }
 
+    private fun presetsRes(): List<String> {
+        val s = getSharedPreferences("cfg", Context.MODE_PRIVATE).getString("res_presets", null)
+        val base = if (s.isNullOrEmpty()) listOf("1080x1920") else s.split(",")
+        val l = base.filter { it.matches(Regex("\\d+x\\d+")) }.toMutableList()
+        if (!l.contains("1080x1920")) l.add(0, "1080x1920")
+        return l
+    }
+
     private fun fecharResolucao() {
         try {
             resolucao?.let { wm?.removeView(it) }
@@ -298,12 +313,30 @@ class TeclaService : AccessibilityService() {
             }.start()
         }
 
+        val lista = LinearLayout(this)
+        lista.orientation = LinearLayout.VERTICAL
+        for (p in presetsRes()) {
+            lista.addView(botaoRes(p.replace("x", " x ")) { rodarRes("wm size " + p) })
+        }
+        lista.addView(botaoRes("Resetar resolução") { rodarRes("wm size reset") })
+        lista.addView(botaoRes("Tamanho atual") { rodarRes("wm size") })
+        lista.addView(
+            botaoRes("Outra resolução...") {
+                fecharResolucao()
+                abrirTela(ResolucaoActivity::class.java)
+            }
+        )
+        lista.addView(botaoRes("Fechar") { fecharResolucao() })
+
+        val sc = ScrollView(this)
+        sc.addView(lista)
+        sc.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(230)
+        )
+
         caixa.addView(titulo)
         caixa.addView(status)
-        caixa.addView(botaoRes("1080 x 1920") { rodarRes("wm size 1080x1920") })
-        caixa.addView(botaoRes("Resetar resolução") { rodarRes("wm size reset") })
-        caixa.addView(botaoRes("Tamanho atual") { rodarRes("wm size") })
-        caixa.addView(botaoRes("Fechar") { fecharResolucao() })
+        caixa.addView(sc)
 
         val params = WindowManager.LayoutParams(
             dp(300),
@@ -596,9 +629,9 @@ class TeclaService : AccessibilityService() {
         linha.addView(chip("Dir") { Janelas.metade(this, true) })
         linha.addView(chip("−") { Janelas.mudarTamanho(this, 0.87f) })
         linha.addView(chip("+") { Janelas.mudarTamanho(this, 1.15f) })
+        linha.addView(chip("Min") { Janelas.minimizar(this) })
         linha.addView(chip("Máx") { Janelas.maximizar(this) })
         linha.addView(chip("Padrão") { Janelas.padrao(this) })
-        linha.addView(chip("Foto") { Janelas.captura(this) })
         linha.addView(chip("×") { esconderControle() })
 
         val params = WindowManager.LayoutParams(
@@ -784,6 +817,7 @@ class TeclaService : AccessibilityService() {
         relogio.setPadding(dp(12), 0, dp(6), 0)
         linha.addView(relogio)
 
+        linha.addView(texto("▢", false) { recentes() })
         linha.addView(texto("−", false) { Janelas.mudarTamanho(this, 0.87f) })
         linha.addView(texto("+", false) { Janelas.mudarTamanho(this, 1.15f) })
         linha.addView(texto("×", false) { fecharJanelas() })
@@ -884,6 +918,7 @@ class TeclaService : AccessibilityService() {
         linha.addView(sol)
         linha.addView(controleBrilho())
 
+        linha.addView(texto("▢", true) { recentes() })
         linha.addView(texto("☰", false) { alternarPainel() })
         linha.addView(texto("⛶", true) { alternarResolucao() })
         linha.addView(texto("×", true) { fecharJanelas() })
