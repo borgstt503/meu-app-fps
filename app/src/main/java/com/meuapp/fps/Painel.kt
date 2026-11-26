@@ -48,12 +48,10 @@ object Painel {
     }
 
     private fun pintar(c: Context, t: Tile) {
-        val fundo = if (t.on) Color.parseColor("#4CC2FF") else Color.parseColor("#3A3A3A")
+        val fundo = if (t.on) Atalhos.acento(c) else Atalhos.cartaoTema(c)
         t.caixa.background = arred(c, fundo, 10)
         t.titulo.setTextColor(if (t.on) Color.BLACK else Color.WHITE)
-        t.sub.setTextColor(
-            if (t.on) Color.parseColor("#0F3347") else Color.parseColor("#A8A8A8")
-        )
+        t.sub.setTextColor(if (t.on) Color.argb(190, 0, 0, 0) else Atalhos.suaveTema(c))
     }
 
     private fun criarTile(
@@ -100,13 +98,20 @@ object Painel {
         return tile
     }
 
-    private fun alternar(c: Context, t: Tile, ligar: String, desligar: String) {
+    private fun alternar(
+        c: Context,
+        t: Tile,
+        ligar: String,
+        desligar: String,
+        subOn: String = "Ligado",
+        subOff: String = "Desligado"
+    ) {
         if (!Atalhos.shizukuOk()) {
             Atalhos.aviso(c, "Ligue o Shizuku e autorize o app")
             return
         }
         t.on = !t.on
-        t.sub.text = if (t.on) "Ligado" else "Desligado"
+        t.sub.text = if (t.on) subOn else subOff
         pintar(c, t)
         val cmd = if (t.on) ligar else desligar
         Thread { Atalhos.rodar(cmd) }.start()
@@ -173,7 +178,7 @@ object Painel {
         l.setPadding(dp(c, 8), dp(c, 10), dp(c, 8), 0)
 
         val t = TextView(c)
-        t.setTextColor(Color.parseColor("#D0D0D0"))
+        t.setTextColor(Atalhos.claroTema(c))
         t.textSize = 12f
 
         fun texto(p: Int) {
@@ -181,11 +186,12 @@ object Painel {
         }
         texto(atual)
 
+        val tinta = ColorStateList.valueOf(Atalhos.acento(c))
         val s = SeekBar(c)
         s.max = max
         s.progress = atual
-        s.progressTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
-        s.thumbTintList = ColorStateList.valueOf(Color.parseColor("#4CC2FF"))
+        s.progressTintList = tinta
+        s.thumbTintList = tinta
         s.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {
                 texto(p)
@@ -207,7 +213,9 @@ object Painel {
     fun build(c: Context, fechar: () -> Unit): View {
         val raiz = LinearLayout(c)
         raiz.orientation = LinearLayout.VERTICAL
-        raiz.background = arred(c, Color.parseColor("#F2262222"), 14)
+        val fundo = arred(c, Atalhos.comAlfa(Atalhos.fundoTema(c), 0xF2), 14)
+        fundo.setStroke(dp(c, 1), Atalhos.bordaTema(c))
+        raiz.background = fundo
         raiz.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10))
 
         val grade = GridLayout(c)
@@ -240,9 +248,28 @@ object Painel {
             )
         }
 
+        val rot = criarTile(c, "Rotação", "...", null) { t ->
+            alternar(
+                c, t,
+                "settings put system accelerometer_rotation 1",
+                "settings put system accelerometer_rotation 0",
+                "Automática", "Travada"
+            )
+        }
+
         val camera = criarTile(c, "Câmera", "Abrir", null) {
             fechar()
             abrirTela(c, Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+        }
+
+        val resol = criarTile(c, "Resolução", "Alterar", null) {
+            fechar()
+            abrirTela(c, Intent(c, ResolucaoActivity::class.java))
+        }
+
+        val tarefas = criarTile(c, "Tarefas", "Apps abertos", null) {
+            fechar()
+            abrirTela(c, Intent(c, GerenciadorActivity::class.java))
         }
 
         val ajustes = criarTile(c, "Ajustes", "Sistema", null) {
@@ -254,8 +281,16 @@ object Painel {
         grade.addView(bt.caixa)
         grade.addView(zen.caixa)
         grade.addView(dns.caixa)
+        grade.addView(rot.caixa)
         grade.addView(camera.caixa)
+        grade.addView(resol.caixa)
+        grade.addView(tarefas.caixa)
         grade.addView(ajustes.caixa)
+
+        val rotAuto = Settings.System.getInt(c.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1) == 1
+        rot.on = rotAuto
+        rot.sub.text = if (rotAuto) "Automática" else "Travada"
+        pintar(c, rot)
 
         val brilhoAtual = Settings.System.getInt(
             c.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128
@@ -288,7 +323,7 @@ object Painel {
         val nivel = bat?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
         val rodape = TextView(c)
         rodape.text = "Bateria  " + nivel + "%"
-        rodape.setTextColor(Color.parseColor("#A8A8A8"))
+        rodape.setTextColor(Atalhos.suaveTema(c))
         rodape.textSize = 12f
         rodape.setPadding(dp(c, 8), dp(c, 12), 0, 0)
 
