@@ -32,11 +32,11 @@ class MainActivity : Activity() {
     private val itensMenu = ArrayList<TextView>()
     private var secaoAtual = 0
     private var listaAberta = false
+
     private val corFundo by lazy { Atalhos.fundoTema(this) }
     private val corCartao by lazy { Atalhos.cartaoTema(this) }
     private val suave by lazy { Atalhos.suaveTema(this) }
     private val azul by lazy { Atalhos.acento(this) }
-    
 
     private val fixos = setOf(
         "com.dts.freefireth",
@@ -45,6 +45,21 @@ class MainActivity : Activity() {
     )
 
     private val tf by lazy { Atalhos.typeface(this) }
+
+    private val atalhosAjuda = listOf(
+        Pair("F1", "Janelas recentes (a tela do quadrado). Deslize um app para fechar"),
+        Pair("F2", "Controle da janela da frente: Esq, Dir, menor, maior, Min, Máx e Padrão"),
+        Pair("F3", "Barra de tarefas flutuante com seus apps fixados"),
+        Pair("F4", "Fixa ou solta a tela (trava barra de notificações e Home)"),
+        Pair("F5", "Recarrega a janela flutuante. Sem janela, reinicia o app da frente (aperte 2 vezes)"),
+        Pair("F6", "Resolução da tela: presets, resetar e outra resolução"),
+        Pair("F7", "Liga ou desliga o teclado na janela flutuante de site"),
+        Pair("F8", "Volta para a tela inicial do Sent"),
+        Pair("F9", "Painel rápido: Wi-Fi, Bluetooth, brilho, volume e mais"),
+        Pair("F10", "Mostra ou esconde o FPS e a hora"),
+        Pair("F11", "Barra de apps no topo, com brilho e atalhos"),
+        Pair("F12", "Apaga a tela. Para ligar, use o botão de ligar")
+    )
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Atalhos.comEscala(newBase))
@@ -81,7 +96,7 @@ class MainActivity : Activity() {
         return c
     }
 
-    private fun linha(titulo: String, sub: String, acao: () -> Unit): LinearLayout {
+    private fun linha(ic: String, titulo: String, sub: String, acao: () -> Unit): LinearLayout {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.HORIZONTAL
         c.gravity = Gravity.CENTER_VERTICAL
@@ -93,6 +108,11 @@ class MainActivity : Activity() {
         )
         lp.bottomMargin = dp(6)
         c.layoutParams = lp
+
+        val i = TextView(this)
+        i.text = ic
+        i.textSize = 20f
+        i.setPadding(0, 0, dp(14), 0)
 
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
@@ -118,6 +138,7 @@ class MainActivity : Activity() {
         seta.setTextColor(suave)
         seta.textSize = 22f
 
+        c.addView(i)
         c.addView(col)
         c.addView(seta)
         c.setOnClickListener { acao() }
@@ -173,7 +194,8 @@ class MainActivity : Activity() {
         t2.textSize = 13f
 
         val t3 = TextView(this)
-        t3.text = "Escala do app: " + Atalhos.nomesEscala[Atalhos.indiceEscala(this)]
+        t3.text = "Tema: " + Atalhos.nomesTema[Atalhos.indiceTema(this)] +
+            "   Escala: " + Atalhos.nomesEscala[Atalhos.indiceEscala(this)]
         t3.setTextColor(azul)
         t3.textSize = 12f
 
@@ -377,6 +399,50 @@ class MainActivity : Activity() {
         aviso("Free Fire não encontrado neste celular.")
     }
 
+    private fun rodarSecao(cmd: String, secao: Int) {
+        if (!garantirShizuku()) return
+        Thread {
+            Atalhos.rodar(cmd)
+            Thread.sleep(300)
+            runOnUiThread { mostrarSecao(secao) }
+        }.start()
+    }
+
+    private fun orientacaoAtual(): String {
+        val auto = Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1)
+        if (auto == 1) return "Automática"
+        return when (Settings.System.getInt(contentResolver, Settings.System.USER_ROTATION, 0)) {
+            1 -> "Paisagem"
+            2 -> "Retrato invertido"
+            3 -> "Paisagem invertida"
+            else -> "Retrato"
+        }
+    }
+
+    private fun infoMouse(destino: TextView) {
+        if (!Atalhos.shizukuOk()) {
+            destino.text = "Ligue o Shizuku para listar os mouses"
+            return
+        }
+        Thread {
+            val s = Atalhos.rodar("cat /proc/bus/input/devices")
+            val achados = ArrayList<String>()
+            for (bloco in s.split("\n\n")) {
+                if (!Regex("Handlers=.*mouse").containsMatchIn(bloco)) continue
+                val nome = Regex("Name=\"([^\"]*)\"").find(bloco)?.groupValues?.get(1) ?: continue
+                val vp = Regex("Vendor=(\\w+) Product=(\\w+)").find(bloco)
+                achados.add(
+                    nome + (if (vp != null) "  (" + vp.groupValues[1] + ":" + vp.groupValues[2] + ")" else "")
+                )
+            }
+            val vel = Settings.System.getInt(contentResolver, "pointer_speed", 0)
+            val texto = (if (achados.isEmpty()) "Nenhum mouse detectado" else achados.joinToString("\n")) +
+                "\nVelocidade do ponteiro: " + vel +
+                "\nDPI: o Android não informa. Ele é ajustado no botão DPI do próprio mouse."
+            runOnUiThread { destino.text = texto }
+        }.start()
+    }
+
     private fun secaoSistema(d: LinearLayout) {
         d.addView(titulo("Sistema"))
         d.addView(cabecalho())
@@ -390,31 +456,40 @@ class MainActivity : Activity() {
         info.addView(t)
         d.addView(info)
 
-        d.addView(linha("Lançador padrão", "Escolha o Sent como tela inicial") {
+        d.addView(linha("🏠", "Lançador padrão", "Escolha o Sent como tela inicial") {
             startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
         })
-        d.addView(linha("Atalho F11 / F5", "Ative o serviço Sent atalhos em Acessibilidade") {
+        d.addView(linha("⌨️", "Atalhos de teclado", "Ative o serviço Sent atalhos em Acessibilidade") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        d.addView(linha("Atualizar", "Recarregar as informações") { mostrarSecao(0) })
+        d.addView(linha("📋", "Gerenciador de tarefas", "Apps em execução e memória") {
+            startActivity(Intent(this, GerenciadorActivity::class.java))
+        })
+        d.addView(linha("🔄", "Atualizar", "Recarregar as informações") { mostrarSecao(0) })
     }
 
     private fun secaoPersonalizar(d: LinearLayout) {
         d.addView(titulo("Personalizar"))
         d.addView(cabecalho())
 
-        d.addView(linha("Plano de fundo", "Escolher uma foto da galeria") { escolherFundo() })
-        d.addView(linha("Fundo padrão", "Voltar ao degradê") {
+        d.addView(linha("🖼️", "Plano de fundo", "Escolher uma foto da galeria") { escolherFundo() })
+        d.addView(linha("♻️", "Fundo padrão", "Voltar ao degradê") {
             Atalhos.apagarFundo(this)
             mostrarSecao(1)
         })
-        d.addView(linha("Fonte", Atalhos.fontes[Atalhos.indiceFonte(this)].second) {
+        d.addView(linha("🎨", "Cor do tema", Atalhos.nomesTema[Atalhos.indiceTema(this)]) {
+            Atalhos.escolher(this, "Cor do tema", Atalhos.nomesTema) { i ->
+                Atalhos.setI(this, "tema", i)
+                recreate()
+            }
+        })
+        d.addView(linha("🔤", "Fonte", Atalhos.fontes[Atalhos.indiceFonte(this)].second) {
             Atalhos.escolher(this, "Fonte", Atalhos.fontes.map { it.second }) { i ->
                 Atalhos.setI(this, "fonte", i)
                 recreate()
             }
         })
-        d.addView(linha("Cursor", Atalhos.cursores[Atalhos.indiceCursor(this)]) {
+        d.addView(linha("🖱️", "Cursor", Atalhos.cursores[Atalhos.indiceCursor(this)]) {
             Atalhos.escolher(this, "Cursor", Atalhos.cursores) { i ->
                 Atalhos.setI(this, "cursor", i)
                 recreate()
@@ -422,6 +497,7 @@ class MainActivity : Activity() {
         })
         d.addView(
             linha(
+                "📐",
                 "Resolução do app",
                 "Escala " + Atalhos.nomesEscala[Atalhos.indiceEscala(this)] +
                     " (só o Sent, não a tela do celular)"
@@ -437,40 +513,41 @@ class MainActivity : Activity() {
     private fun secaoJanelas(d: LinearLayout) {
         d.addView(titulo("Janelas"))
 
-        d.addView(linha("Tamanho das janelas", Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)]) {
+        d.addView(linha("📏", "Tamanho das janelas", Atalhos.nomesTamanho[Atalhos.indiceTamanho(this)]) {
             Atalhos.escolher(this, "Tamanho das janelas", Atalhos.nomesTamanho) { i ->
                 Atalhos.setI(this, "jan_tam", i)
                 mostrarSecao(2)
             }
         })
-        d.addView(linha("Zoom da página", Atalhos.nomesZoom[Atalhos.indiceZoom(this)]) {
+        d.addView(linha("🔍", "Zoom da página", Atalhos.nomesZoom[Atalhos.indiceZoom(this)]) {
             Atalhos.escolher(this, "Zoom da página", Atalhos.nomesZoom) { i ->
                 Atalhos.setI(this, "jan_zoom", i)
                 mostrarSecao(2)
             }
         })
         d.addView(
-            linha("Abrir apps reais em janela livre", simNao(Atalhos.modoApp(this))) {
+            linha("🪟", "Abrir apps reais em janela livre", simNao(Atalhos.modoApp(this))) {
                 Atalhos.setB(this, "modo_app", !Atalhos.modoApp(this))
                 mostrarSecao(2)
             }
         )
-        d.addView(linha("Bloqueio de anúncios", simNao(Atalhos.bloqueio(this))) {
+        d.addView(linha("🛡️", "Bloqueio de anúncios", simNao(Atalhos.bloqueio(this))) {
             Atalhos.setB(this, "bloq", !Atalhos.bloqueio(this))
             mostrarSecao(2)
         })
-        d.addView(linha("Ativar janelas livres", "Depois reinicie o celular") { ativarJanelas(true) })
-        d.addView(linha("Desativar janelas livres", "Depois reinicie o celular") { ativarJanelas(false) })
-        d.addView(linha("Fechar janelas", "Fecha as janelas de site abertas") { fecharJanelas() })
+        d.addView(linha("✅", "Ativar janelas livres", "Depois reinicie o celular") { ativarJanelas(true) })
+        d.addView(linha("⛔", "Desativar janelas livres", "Depois reinicie o celular") { ativarJanelas(false) })
+        d.addView(linha("✖️", "Fechar janelas", "Fecha as janelas de site abertas") { fecharJanelas() })
     }
 
     private fun secaoJogo(d: LinearLayout) {
         d.addView(titulo("Jogo"))
 
-        d.addView(linha("Modo Jogo", "Fecha apps, liga Não Perturbe e reduz animações") { modoJogo() })
-        d.addView(linha("Restaurar", "Volta Não Perturbe e animações ao normal") { restaurar() })
+        d.addView(linha("🎮", "Modo Jogo", "Fecha apps, liga Não Perturbe e reduz animações") { modoJogo() })
+        d.addView(linha("↩️", "Restaurar", "Volta Não Perturbe e animações ao normal") { restaurar() })
         d.addView(
             linha(
+                "🔒",
                 "Apps protegidos",
                 if (listaAberta) "Toque para esconder a lista" else "Escolha os apps que nunca são fechados"
             ) {
@@ -510,8 +587,136 @@ class MainActivity : Activity() {
 
     private fun secaoOverlay(d: LinearLayout) {
         d.addView(titulo("Overlay de FPS"))
-        d.addView(linha("Ligar overlay", "FPS e hora no topo da tela") { ligarOverlay() })
-        d.addView(linha("Desligar overlay", "Remove o texto do topo") { desligarOverlay() })
+        d.addView(linha("📊", "Ligar overlay", "FPS e hora no topo da tela (F10 também)") { ligarOverlay() })
+        d.addView(linha("🚫", "Desligar overlay", "Remove o texto do topo") { desligarOverlay() })
+    }
+
+    private fun secaoTela(d: LinearLayout) {
+        d.addView(titulo("Tela"))
+
+        val travada = Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1) == 0
+
+        d.addView(linha("📱", "Orientação da tela", orientacaoAtual()) {
+            Atalhos.escolher(
+                this, "Orientação da tela",
+                listOf("Automática", "Paisagem", "Retrato", "Paisagem invertida")
+            ) { i ->
+                val cmd = when (i) {
+                    0 -> "settings put system accelerometer_rotation 1"
+                    1 -> "settings put system accelerometer_rotation 0; settings put system user_rotation 1"
+                    2 -> "settings put system accelerometer_rotation 0; settings put system user_rotation 0"
+                    else -> "settings put system accelerometer_rotation 0; settings put system user_rotation 3"
+                }
+                rodarSecao(cmd, 5)
+            }
+        })
+        d.addView(
+            linha("🔐", "Bloqueio de rotação", if (travada) "Travada" else "Automática") {
+                rodarSecao(
+                    "settings put system accelerometer_rotation " + (if (travada) "1" else "0"),
+                    5
+                )
+            }
+        )
+        d.addView(linha("🖥️", "Resolução da tela", "Qualquer resolução, com presets salvos (F6)") {
+            startActivity(Intent(this, ResolucaoActivity::class.java))
+        })
+        d.addView(linha("🔆", "Painel rápido", "Brilho, volume, Wi-Fi e mais (F9)") {
+            startActivity(Intent(this, PainelActivity::class.java))
+        })
+    }
+
+    private fun secaoMouse(d: LinearLayout) {
+        d.addView(titulo("Mouse"))
+
+        val info = cartao()
+        val t = TextView(this)
+        t.text = "Procurando..."
+        t.setTextColor(Color.WHITE)
+        t.textSize = 13f
+        t.setLineSpacing(0f, 1.25f)
+        info.addView(t)
+        d.addView(info)
+        infoMouse(t)
+
+        d.addView(
+            linha(
+                "⚡",
+                "Velocidade do ponteiro",
+                "Valor atual: " + Settings.System.getInt(contentResolver, "pointer_speed", 0)
+            ) {
+                val valores = (-7..7).toList()
+                Atalhos.escolher(this, "Velocidade do ponteiro", valores.map { it.toString() }) { i ->
+                    rodarSecao("settings put system pointer_speed " + valores[i], 6)
+                }
+            }
+        )
+        d.addView(linha("🖱️", "Estilo do cursor", Atalhos.cursores[Atalhos.indiceCursor(this)]) {
+            Atalhos.escolher(this, "Cursor", Atalhos.cursores) { i ->
+                Atalhos.setI(this, "cursor", i)
+                recreate()
+            }
+        })
+        d.addView(linha("🔄", "Atualizar", "Ler o mouse de novo") { mostrarSecao(6) })
+    }
+
+    private fun secaoAjuda(d: LinearLayout) {
+        d.addView(titulo("Ajuda"))
+
+        val intro = cartao()
+        val it = TextView(this)
+        it.text = "Teclas de atalho do Sent. Elas funcionam com o serviço Sent atalhos ligado em " +
+            "Acessibilidade e, na maioria, com o Shizuku rodando."
+        it.setTextColor(suave)
+        it.textSize = 12f
+        intro.addView(it)
+        d.addView(intro)
+
+        for (par in atalhosAjuda) {
+            val c = LinearLayout(this)
+            c.orientation = LinearLayout.HORIZONTAL
+            c.gravity = Gravity.CENTER_VERTICAL
+            c.background = arred(corCartao, 8)
+            c.setPadding(dp(12), dp(10), dp(12), dp(10))
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.bottomMargin = dp(6)
+            c.layoutParams = lp
+
+            val k = TextView(this)
+            k.text = par.first
+            k.setTextColor(Color.BLACK)
+            k.textSize = 13f
+            k.gravity = Gravity.CENTER
+            k.background = arred(azul, 6)
+            k.setPadding(dp(10), dp(4), dp(10), dp(4))
+
+            val x = TextView(this)
+            x.text = par.second
+            x.setTextColor(Color.WHITE)
+            x.textSize = 13f
+            x.setPadding(dp(12), 0, 0, 0)
+            x.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+
+            c.addView(k)
+            c.addView(x)
+            d.addView(c)
+        }
+
+        val dicas = cartao()
+        val dt = TextView(this)
+        dt.text = "Dicas\n" +
+            "• Clique direito (ou segure) em um app para fixar na barra ou na área de trabalho.\n" +
+            "• Clique direito na área de trabalho: fundo, tema e gerenciador de tarefas.\n" +
+            "• Chrome, Opera e outros apps abrem em janela livre pelo Shizuku.\n" +
+            "• Sent versão 1.0"
+        dt.setTextColor(Color.WHITE)
+        dt.textSize = 12f
+        dt.setLineSpacing(0f, 1.25f)
+        dicas.addView(dt)
+        d.addView(dicas)
     }
 
     private fun mostrarSecao(i: Int) {
@@ -535,7 +740,10 @@ class MainActivity : Activity() {
             1 -> secaoPersonalizar(d)
             2 -> secaoJanelas(d)
             3 -> secaoJogo(d)
-            else -> secaoOverlay(d)
+            4 -> secaoOverlay(d)
+            5 -> secaoTela(d)
+            6 -> secaoMouse(d)
+            else -> secaoAjuda(d)
         }
         Atalhos.aplicarFonte(d, tf)
     }
@@ -553,9 +761,6 @@ class MainActivity : Activity() {
             val menu = LinearLayout(this)
             menu.orientation = LinearLayout.VERTICAL
             menu.setPadding(dp(10), dp(14), dp(10), dp(10))
-            menu.layoutParams = LinearLayout.LayoutParams(
-                dp(170), LinearLayout.LayoutParams.MATCH_PARENT
-            )
 
             val voltar = TextView(this)
             voltar.text = "‹  Configurações"
@@ -565,7 +770,10 @@ class MainActivity : Activity() {
             voltar.setOnClickListener { finish() }
             menu.addView(voltar)
 
-            val nomes = listOf("Sistema", "Personalizar", "Janelas", "Jogo", "Overlay de FPS")
+            val nomes = listOf(
+                "Sistema", "Personalizar", "Janelas", "Jogo",
+                "Overlay de FPS", "Tela", "Mouse", "Ajuda"
+            )
             for (i in nomes.indices) {
                 val t = TextView(this)
                 t.text = nomes[i]
@@ -582,6 +790,12 @@ class MainActivity : Activity() {
                 menu.addView(t)
             }
 
+            val scrollMenu = ScrollView(this)
+            scrollMenu.addView(menu)
+            scrollMenu.layoutParams = LinearLayout.LayoutParams(
+                dp(170), LinearLayout.LayoutParams.MATCH_PARENT
+            )
+
             val scroll = ScrollView(this)
             scroll.layoutParams = LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.MATCH_PARENT, 1f
@@ -592,7 +806,7 @@ class MainActivity : Activity() {
             scroll.addView(dir)
             direita = dir
 
-            raiz.addView(menu)
+            raiz.addView(scrollMenu)
             raiz.addView(scroll)
             Atalhos.aplicarFonte(menu, tf)
             setContentView(raiz)
