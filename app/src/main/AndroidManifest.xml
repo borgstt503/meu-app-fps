@@ -87,6 +87,13 @@
             android:exported="false" />
 
         <activity
+            android:name=".ResolucaoActivity"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|density|orientation|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+
+        <activity
             android:name=".PainelActivity"
             android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar"
             android:exported="false" />
