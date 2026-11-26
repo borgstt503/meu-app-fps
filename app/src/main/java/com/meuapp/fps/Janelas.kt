@@ -71,28 +71,18 @@ object Janelas {
         }
     }
 
-    fun captura(c: Context) {
-        if (!Atalhos.shizukuOk()) {
-            Atalhos.aviso(c, "Ligue o Shizuku e autorize o app")
-            return
-        }
-        Thread {
-            val nome = "Sent_" + System.currentTimeMillis() + ".png"
-            val dir = "/sdcard/Pictures/Sent"
-            val s = Atalhos.rodar(
-                "mkdir -p " + dir + "; screencap -p " + dir + "/" + nome + " 2>&1"
-            )
-            if (s.contains("Error", true) || s.contains("Exception", true) ||
-                s.contains("denied", true)
-            ) {
-                Atalhos.aviso(c, "Captura falhou: " + s.take(120))
-            } else {
-                Atalhos.rodar(
-                    "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://" +
-                        dir + "/" + nome
-                )
-                Atalhos.aviso(c, "Captura salva em Pictures/Sent")
-            }
-        }.start()
+    fun minimizar(c: Context) {
+        val m = c.resources.displayMetrics
+        val w = (m.widthPixels * 0.26f).toInt()
+        val h = (m.heightPixels * 0.30f).toInt()
+        val mg = (16 * m.density).toInt()
+        val base = (64 * m.density).toInt()
+        aplicar(
+            c,
+            m.widthPixels - w - mg,
+            m.heightPixels - h - base,
+            m.widthPixels - mg,
+            m.heightPixels - base
+        )
     }
 }
