@@ -24,6 +24,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.GridLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -33,6 +34,11 @@ import android.widget.TextView
 
 class TeclaService : AccessibilityService() {
 
+    companion object {
+        @Volatile
+        var instancia: TeclaService? = null
+    }
+
     private var wm: WindowManager? = null
     private var barra: View? = null
     private var painel: View? = null
@@ -40,7 +46,10 @@ class TeclaService : AccessibilityService() {
     private var taskbar: View? = null
     private var iniciar: View? = null
     private var controle: View? = null
+    private var faixa: View? = null
+    private var alca: View? = null
     private var ultimoF5 = 0L
+    private var ultBorda = 0L
 
     private fun dp(v: Int): Int {
         return (v * resources.displayMetrics.density).toInt()
@@ -66,9 +75,109 @@ class TeclaService : AccessibilityService() {
         return Atalhos.cartaoTema(this)
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instancia = this
+        atualizarBorda()
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
     override fun onInterrupt() {}
+
+    private fun mostrarPorBorda() {
+        val agora = System.currentTimeMillis()
+        if (agora - ultBorda < 900) return
+        ultBorda = agora
+        if (taskbar == null) alternarTaskbar()
+    }
+
+    private fun removerBorda() {
+        try {
+            faixa?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        faixa = null
+        try {
+            alca?.let { wm?.removeView(it) }
+        } catch (e: Throwable) {
+        }
+        alca = null
+    }
+
+    fun atualizarBorda() {
+        removerBorda()
+        if (wm == null) wm = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        if (Atalhos.getB(this, "borda", true)) {
+            val f = View(this)
+            f.setOnHoverListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_HOVER_ENTER ||
+                    e.actionMasked == MotionEvent.ACTION_HOVER_MOVE
+                ) {
+                    mostrarPorBorda()
+                }
+                false
+            }
+            var iniY = 0f
+            f.setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> iniY = e.rawY
+                    MotionEvent.ACTION_MOVE -> {
+                        if (iniY - e.rawY > dp(20)) mostrarPorBorda()
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (Math.abs(iniY - e.rawY) < dp(6)) mostrarPorBorda()
+                    }
+                }
+                true
+            }
+            val p = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                dp(6),
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
+            p.gravity = Gravity.BOTTOM
+            try {
+                wm?.addView(f, p)
+                faixa = f
+            } catch (e: Throwable) {
+            }
+        }
+
+        if (Atalhos.getB(this, "alca", true)) {
+            val a = View(this)
+            val g = GradientDrawable()
+            g.setColor(Atalhos.comAlfa(ac(), 0xB0))
+            g.cornerRadius = dp(5).toFloat()
+            a.background = g
+            a.setOnClickListener { alternarTaskbar() }
+            a.setOnHoverListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_HOVER_ENTER) mostrarPorBorda()
+                false
+            }
+            val pa = WindowManager.LayoutParams(
+                dp(72),
+                dp(10),
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
+            pa.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            pa.y = dp(6)
+            try {
+                wm?.addView(a, pa)
+                alca = a
+            } catch (e: Throwable) {
+            }
+        }
+    }
 
     private fun appNaFrente(): String? {
         return try {
@@ -780,7 +889,7 @@ class TeclaService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        params.y = dp(72)
+        params.y = dp(110)
 
         wm?.addView(caixa, params)
         iniciar = caixa
@@ -798,15 +907,18 @@ class TeclaService : AccessibilityService() {
         fundo.cornerRadius = dp(24).toFloat()
         fundo.setStroke(dp(1), bordaT())
 
-        val linha = LinearLayout(this)
-        linha.orientation = LinearLayout.HORIZONTAL
-        linha.gravity = Gravity.CENTER_VERTICAL
-        linha.background = fundo
-        linha.setPadding(dp(10), dp(6), dp(10), dp(6))
+        val caixa = LinearLayout(this)
+        caixa.orientation = LinearLayout.VERTICAL
+        caixa.gravity = Gravity.CENTER_HORIZONTAL
+        caixa.background = fundo
+        caixa.setPadding(dp(10), dp(6), dp(10), dp(8))
 
-        linha.addView(logoStart())
+        val apps = LinearLayout(this)
+        apps.orientation = LinearLayout.HORIZONTAL
+        apps.gravity = Gravity.CENTER_VERTICAL
+        apps.addView(logoStart())
         for (p in listaFixados()) {
-            linha.addView(iconeTaskbar(p))
+            apps.addView(iconeTaskbar(p))
         }
 
         val relogio = TextClock(this)
@@ -815,13 +927,40 @@ class TeclaService : AccessibilityService() {
         relogio.setTextColor(claro())
         relogio.textSize = 13f
         relogio.setPadding(dp(12), 0, dp(6), 0)
-        linha.addView(relogio)
+        apps.addView(relogio)
 
-        linha.addView(texto("▢", false) { recentes() })
-        linha.addView(texto("−", false) { Janelas.mudarTamanho(this, 0.87f) })
-        linha.addView(texto("+", false) { Janelas.mudarTamanho(this, 1.15f) })
-        linha.addView(texto("×", false) { fecharJanelas() })
-        linha.addView(texto("⌂", false) { irParaInicio() })
+        val tools = LinearLayout(this)
+        tools.orientation = LinearLayout.HORIZONTAL
+        tools.gravity = Gravity.CENTER_VERTICAL
+        tools.addView(chip("FPS") {
+            esconderTaskbar()
+            alternarOverlayFps()
+        })
+        tools.addView(chip("Painel") {
+            esconderTaskbar()
+            alternarPainel()
+        })
+        tools.addView(chip("Resolução") {
+            esconderTaskbar()
+            alternarResolucao()
+        })
+        tools.addView(chip("Janela") {
+            esconderTaskbar()
+            alternarControle()
+        })
+        tools.addView(chip("Recentes") { recentes() })
+        tools.addView(chip("−") { Janelas.mudarTamanho(this, 0.87f) })
+        tools.addView(chip("+") { Janelas.mudarTamanho(this, 1.15f) })
+        tools.addView(chip("Início") { irParaInicio() })
+        tools.addView(chip("×") { fecharJanelas() })
+
+        val rolagem = HorizontalScrollView(this)
+        rolagem.isHorizontalScrollBarEnabled = false
+        rolagem.setPadding(0, dp(6), 0, 0)
+        rolagem.addView(tools)
+
+        caixa.addView(apps)
+        caixa.addView(rolagem)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -833,9 +972,9 @@ class TeclaService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        params.y = dp(10)
+        params.y = dp(22)
 
-        linha.setOnTouchListener { _, e ->
+        caixa.setOnTouchListener { _, e ->
             if (e.action == MotionEvent.ACTION_OUTSIDE) {
                 esconderTaskbar()
                 true
@@ -844,8 +983,8 @@ class TeclaService : AccessibilityService() {
             }
         }
 
-        wm?.addView(linha, params)
-        taskbar = linha
+        wm?.addView(caixa, params)
+        taskbar = caixa
     }
 
     private fun controleBrilho(): SeekBar {
@@ -939,10 +1078,17 @@ class TeclaService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        removerBorda()
         esconder()
         esconderTaskbar()
         esconderControle()
         fecharResolucao()
+        instancia = null
         return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        instancia = null
+        super.onDestroy()
     }
 }
