@@ -49,7 +49,7 @@ class MainActivity : Activity() {
     private val atalhosAjuda = listOf(
         Pair("F1", "Janelas recentes (a tela do quadrado). Deslize um app para fechar"),
         Pair("F2", "Controle da janela da frente: Esq, Dir, menor, maior, Min, Máx e Padrão"),
-        Pair("F3", "Barra de tarefas flutuante com seus apps fixados"),
+        Pair("F3", "Barra de tarefas flutuante com seus apps fixados e ferramentas"),
         Pair("F4", "Fixa ou solta a tela (trava barra de notificações e Home)"),
         Pair("F5", "Recarrega a janela flutuante. Sem janela, reinicia o app da frente (aperte 2 vezes)"),
         Pair("F6", "Resolução da tela: presets, resetar e outra resolução"),
@@ -438,7 +438,7 @@ class MainActivity : Activity() {
             val vel = Settings.System.getInt(contentResolver, "pointer_speed", 0)
             val texto = (if (achados.isEmpty()) "Nenhum mouse detectado" else achados.joinToString("\n")) +
                 "\nVelocidade do ponteiro: " + vel +
-                "\nDPI: o Android não informa. Ele é ajustado no botão DPI do próprio mouse."
+                "\nDPI: o Android não informa. Use o Teste de DPI abaixo para medir."
             runOnUiThread { destino.text = texto }
         }.start()
     }
@@ -535,6 +535,24 @@ class MainActivity : Activity() {
             Atalhos.setB(this, "bloq", !Atalhos.bloqueio(this))
             mostrarSecao(2)
         })
+        d.addView(
+            linha(
+                "⬇️",
+                "Gesto da borda inferior",
+                simNao(Atalhos.getB(this, "borda", true)) + "  (mouse na borda de baixo abre a barra)"
+            ) {
+                Atalhos.setB(this, "borda", !Atalhos.getB(this, "borda", true))
+                TeclaService.instancia?.atualizarBorda()
+                mostrarSecao(2)
+            }
+        )
+        d.addView(
+            linha("➖", "Alça na borda", simNao(Atalhos.getB(this, "alca", true)) + "  (barrinha para clicar)") {
+                Atalhos.setB(this, "alca", !Atalhos.getB(this, "alca", true))
+                TeclaService.instancia?.atualizarBorda()
+                mostrarSecao(2)
+            }
+        )
         d.addView(linha("✅", "Ativar janelas livres", "Depois reinicie o celular") { ativarJanelas(true) })
         d.addView(linha("⛔", "Desativar janelas livres", "Depois reinicie o celular") { ativarJanelas(false) })
         d.addView(linha("✖️", "Fechar janelas", "Fecha as janelas de site abertas") { fecharJanelas() })
@@ -639,6 +657,9 @@ class MainActivity : Activity() {
         d.addView(info)
         infoMouse(t)
 
+        d.addView(linha("📏", "Teste de DPI", "Mede o DPI do mouse pela distância que você move") {
+            startActivity(Intent(this, DpiActivity::class.java))
+        })
         d.addView(
             linha(
                 "⚡",
@@ -708,10 +729,14 @@ class MainActivity : Activity() {
         val dicas = cartao()
         val dt = TextView(this)
         dt.text = "Dicas\n" +
+            "• Borda inferior: leve o mouse até a borda de baixo, arraste para cima ou clique na alça " +
+            "para abrir a barra de tarefas sem usar teclado (funciona mesmo com o GG Mouse Pro).\n" +
+            "• Com o GG Mouse Pro em modo jogo, as teclas F1 a F12 podem não chegar ao Sent. " +
+            "Use a barra da borda ou ative a digitação nele.\n" +
             "• Clique direito (ou segure) em um app para fixar na barra ou na área de trabalho.\n" +
             "• Clique direito na área de trabalho: fundo, tema e gerenciador de tarefas.\n" +
             "• Chrome, Opera e outros apps abrem em janela livre pelo Shizuku.\n" +
-            "• Sent versão 1.0"
+            "• Sent versão 1.1"
         dt.setTextColor(Color.WHITE)
         dt.textSize = 12f
         dt.setLineSpacing(0f, 1.25f)
